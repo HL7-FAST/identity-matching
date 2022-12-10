@@ -1,7 +1,11 @@
 package ca.uhn.fhir.jpa.starter.operations;
 
 import ca.uhn.fhir.rest.annotation.Operation;
+import ca.uhn.fhir.rest.annotation.OperationParam;
+
+import org.hl7.fhir.r4.model.BooleanType;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.IntegerType;
 import org.hl7.fhir.r4.model.Patient;
 
 public class IdentityMatching {
@@ -18,9 +22,9 @@ public class IdentityMatching {
 	 */
 	@Operation(name="$match", typeName="Patient", idempotent=true)
 	public Bundle patientTypeOperation(
-		//@OperationParam(name="resource") Resource patient,
-		//@OperationParam(name="onlyCertainMatches") boolean onlyCertainMatches,
-		//@OperationParam(name="count") int count
+		@OperationParam(name="resource") Patient patient,
+		@OperationParam(name="onlyCertainMatches") BooleanType onlyCertainMatches,
+		@OperationParam(name="count") IntegerType count
 	)
 	{
 
@@ -28,12 +32,12 @@ public class IdentityMatching {
 		// Populate bundle with matching resources
 		Patient foundPatient = new Patient();
 		foundPatient.addIdentifier().setSystem("urn:mrns").setValue("12345");
-		foundPatient.addName().setFamily("Phillips").addGiven("Adam");
+		foundPatient.addName().setFamily("GenericLastName").addGiven("GenericFirstName");
 		foundPatient.addAddress()
 			.addLine("1777 Some Street")
-			.setCity("Morgantown")
-			.setState("West Virginia")
-			.setPostalCode("26506");
+			.setCity("ImaginaryVille")
+			.setState("Imaginary State")
+			.setPostalCode("11111");
 
 		retVal.setType(Bundle.BundleType.SEARCHSET);
 		retVal.addEntry()
