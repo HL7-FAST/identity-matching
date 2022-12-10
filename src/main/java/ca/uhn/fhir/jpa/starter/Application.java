@@ -5,6 +5,7 @@ import ca.uhn.fhir.jpa.batch2.JpaBatch2Config;
 import ca.uhn.fhir.jpa.starter.annotations.OnEitherVersion;
 import ca.uhn.fhir.jpa.starter.common.FhirTesterConfig;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
+import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
 import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.SubscriptionProcessorConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.WebsocketDispatcherConfig;
@@ -58,6 +59,10 @@ public class Application extends SpringBootServletInitializer {
   @Bean
   @Conditional(OnEitherVersion.class)
   public ServletRegistrationBean hapiServletRegistration(RestfulServer restfulServer) {
+
+	  //add custom operations
+	  restfulServer.registerProviders(new IdentityMatching());
+
     ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean();
     beanFactory.autowireBean(restfulServer);
     servletRegistrationBean.setServlet(restfulServer);
