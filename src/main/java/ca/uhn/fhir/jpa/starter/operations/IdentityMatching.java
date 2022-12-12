@@ -1,12 +1,22 @@
 package ca.uhn.fhir.jpa.starter.operations;
 
+import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.jpa.search.builder.SearchBuilder;
+import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
+import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
+import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
+import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 
-import org.hl7.fhir.r4.model.BooleanType;
-import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.IntegerType;
-import org.hl7.fhir.r4.model.Patient;
+import ca.uhn.fhir.rest.annotation.ResourceParam;
+import ca.uhn.fhir.rest.client.api.IGenericClient;
+import org.hl7.fhir.r4.model.*;
+
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
+import java.util.ArrayList;
+import java.util.List;
 
 public class IdentityMatching {
 
@@ -22,30 +32,56 @@ public class IdentityMatching {
 	 */
 	@Operation(name="$match", typeName="Patient", idempotent=true)
 	public Bundle patientTypeOperation(
-		@OperationParam(name="resource") Patient patient,
+		@ResourceParam Patient patient,
 		@OperationParam(name="onlyCertainMatches") BooleanType onlyCertainMatches,
 		@OperationParam(name="count") IntegerType count
 	)
 	{
 
-		Bundle retVal = new Bundle();
-		// Populate bundle with matching resources
-		Patient foundPatient = new Patient();
-		foundPatient.addIdentifier().setSystem("urn:mrns").setValue("12345");
-		foundPatient.addName().setFamily("GenericLastName").addGiven("GenericFirstName");
-		foundPatient.addAddress()
-			.addLine("1777 Some Street")
-			.setCity("ImaginaryVille")
-			.setState("Imaginary State")
-			.setPostalCode("11111");
+		FhirContext ctx = FhirContextProvider.getFhirContext();
+		IGenericClient client = ctx.newRestfulGenericClient("http://localhost:8080/fhir/");
 
-		retVal.setType(Bundle.BundleType.SEARCHSET);
-		retVal.addEntry()
-			.setFullUrl(foundPatient.getIdElement().getValue())
-			.setResource(foundPatient);
+		//build out identifier search params
+		List<IdentifierQueryParams> identifierParams = new ArrayList<>();
+		List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
+		patient.getIdentifier().stream().forEach(x -> {
+
+			List<Coding> codings = x.getType().getCoding();
+
+			if(codings.size() > 0) {
+				identifierParams.add(new IdentifierQueryParams(
+					x.getSystem(),
+					x.getValue(),
+					codings.stream().findFirst().get().getCode()
+				));
+
+				baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));			;
+
+			}
+		});
 
 
-		return retVal;
+
+		Bundle foundPatients = client.search()
+			.forResource(Patient.class)
+//			.where(Patient.IDENTIFIER.exactly()
+//					.systemAndValues(
+//						identifierParams.stream().filter(x -> x.getIdentifierCode().equals("MR")).findFirst().get().getIdentifierSystem(),
+//				identifierParams.stream().filter(x -> x.getIdentifierCode().equals("MR")).findFirst().get().getIdentifierValue()
+//				)
+//			)
+			.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams))
+			.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()))
+			.where(Patient.GIVEN.matchesExactly().values(patient.getName().get(0).getGivenAsSingleString()))
+			.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()))
+			.where(Patient.GENDER.exactly().code(patient.getGender().toCode()))
+
+			.returnBundle(Bundle.class)
+			.execute();
+
+		foundPatients.setType(Bundle.BundleType.SEARCHSET);
+
+		return foundPatients;
 	}
 
 }
