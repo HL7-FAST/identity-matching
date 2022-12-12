@@ -29,7 +29,7 @@ public class IdentityMatching {
 	 * Note: as this is the only out parameter, it is a resource, and it has the name 'return', the result of this operation is returned directly as a resource
 	 */
 	@Operation(name="$match", typeName="Patient", idempotent=true)
-	public Bundle patientTypeOperation(
+	public Bundle patientMatchOperation(
 		@ResourceParam Patient patient,
 		@OperationParam(name="onlyCertainMatches") BooleanType onlyCertainMatches,
 		@OperationParam(name="count") IntegerType count
@@ -106,9 +106,35 @@ public class IdentityMatching {
 				}
 			}
 
-		//TODO: Grade results
+		//check telecom if present
+		if(patient.hasTelecom())
+		{
+			for (ContactPoint x : patient.getTelecom()) {
+				if (x.getSystem().equals(ContactPoint.ContactPointSystem.PHONE)) {
+					patientQuery.where(Patient.TELECOM.exactly().systemAndValues(ContactPoint.ContactPointSystem.PHONE.toCode(), x.getValue()));
+				} else if (x.getSystem().equals(ContactPoint.ContactPointSystem.EMAIL)) {
+					patientQuery.where(Patient.TELECOM.exactly().systemAndValues(ContactPoint.ContactPointSystem.EMAIL.toCode(), x.getValue()));
+				}
+			}
+		}
 
 		Bundle foundPatients = patientQuery.execute();
+
+		//TODO: Grade results
+		for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
+		{
+			Patient patientEntry = (Patient)pf.getResource();
+
+			if(patientEntry.hasIdentifier())
+			{
+				Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
+				searchComp.setMode(Bundle.SearchEntryMode.MATCH);
+				searchComp.setScore(.99);
+				pf.setSearch(searchComp);
+			}
+
+		}
+
 		return foundPatients;
 	}
 
