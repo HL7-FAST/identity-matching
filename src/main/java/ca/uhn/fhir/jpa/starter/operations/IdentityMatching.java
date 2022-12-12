@@ -1,20 +1,18 @@
 package ca.uhn.fhir.jpa.starter.operations;
 
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.search.builder.SearchBuilder;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
-
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
+import ca.uhn.fhir.rest.gclient.IQuery;
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,9 +37,9 @@ public class IdentityMatching {
 	{
 
 		FhirContext ctx = FhirContextProvider.getFhirContext();
-		IGenericClient client = ctx.newRestfulGenericClient("http://localhost:8080/fhir/");
+		IGenericClient client = ctx.newRestfulGenericClient("http://localhost:8080/fhir/"); //TODO: pull from config
 
-		//build out identifier search params
+		//build out identifier search params and base identifier params by traversing the identifiers
 		List<IdentifierQueryParams> identifierParams = new ArrayList<>();
 		List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
 		patient.getIdentifier().stream().forEach(x -> {
@@ -60,27 +58,57 @@ public class IdentityMatching {
 			}
 		});
 
+		//Dynamically build out patient match query based on provided patient resource
+		IQuery<Bundle> patientQuery = client.search()
+		.forResource(Patient.class)
+		.returnBundle(Bundle.class);
 
+		//Check for identifiers if present
+		if(baseIdentifierParams.size() > 0)
+		{
+			patientQuery.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams));
+		}
 
-		Bundle foundPatients = client.search()
-			.forResource(Patient.class)
-//			.where(Patient.IDENTIFIER.exactly()
-//					.systemAndValues(
-//						identifierParams.stream().filter(x -> x.getIdentifierCode().equals("MR")).findFirst().get().getIdentifierSystem(),
-//				identifierParams.stream().filter(x -> x.getIdentifierCode().equals("MR")).findFirst().get().getIdentifierValue()
-//				)
-//			)
-			.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams))
-			.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()))
-			.where(Patient.GIVEN.matchesExactly().values(patient.getName().get(0).getGivenAsSingleString()))
-			.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()))
-			.where(Patient.GENDER.exactly().code(patient.getGender().toCode()))
+		//check for family name if present, choose the most recent (first)
+		if(patient.getName().get(0).getFamily() != null) {
+			patientQuery.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()));
+		}
 
-			.returnBundle(Bundle.class)
-			.execute();
+		//check for given name if present, check joined given names
+		if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
+		{
+			patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
+		}
 
-		foundPatients.setType(Bundle.BundleType.SEARCHSET);
+		//check for birthdate if present
+		if(patient.hasBirthDate())
+		{
+			patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
+		}
 
+		//check gender if present
+		if(patient.hasGender())
+		{
+			patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
+		}
+
+		//check for address if present
+		if(patient.hasAddress())
+			for (Address x : patient.getAddress()) {
+				if (x.hasLine()) {
+					patientQuery.where(Patient.ADDRESS.contains().values(StringUtils.join(x.getLine(), " ")));
+				}
+				if (x.hasCity()) {
+					patientQuery.where(Patient.ADDRESS_CITY.matchesExactly().value(x.getCity()));
+				}
+				if (x.hasPostalCode()) {
+					patientQuery.where(Patient.ADDRESS_POSTALCODE.matchesExactly().value(x.getPostalCode()));
+				}
+			}
+
+		//TODO: Grade results
+
+		Bundle foundPatients = patientQuery.execute();
 		return foundPatients;
 	}
 
