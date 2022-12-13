@@ -22,6 +22,7 @@ public class IdentityMatchingScorer {
 	private boolean _addressStateMatch;
 	private boolean _addressPostalCodeMatch;
 	private List<String> matchMessages;
+	private Integer weight;
 
 	public IdentityMatchingScorer() { matchMessages = new ArrayList<>(); }
 
@@ -60,6 +61,7 @@ public class IdentityMatchingScorer {
 		_addressPostalCodeMatch = AddressPostalCodeMatch;
 
 		matchMessages = new ArrayList<>();
+		weight = 0;
 	}
 
 	// Grading based on table found http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html#scoring-matches--responders-system-match-output-quality-score
@@ -89,6 +91,26 @@ public class IdentityMatchingScorer {
 		else {
 			return .10;
 		}
+	}
+
+	public Integer getMatchWeight() {
+		//check for weighted combinations
+		weight = 0;
+		if(getPassportMatch()) { weight += 0;	}
+		if(getDriversLicenseMatch()) { weight += 10; }
+		if(
+			(getAddressLineMatch() && getAddressPostalCodeMatch()) ||
+			(getAddressCityMatch() && getAddressStateMatch()) ||
+			getPhoneNumberMatch() ||
+			getEmailMatch() ||
+			getSSNMatch() ||
+			getInsuranceIdentifierMatch() ||
+			getMrnMatch()
+		) { weight += 4; }
+		if(getGivenNameMatch() && getFamilyNameMatch()) { weight += 4; }
+		if(getBirthDateMatch()) { weight += 2; }
+
+		return weight;
 	}
 
 	public List<String> getMatchMessages() {

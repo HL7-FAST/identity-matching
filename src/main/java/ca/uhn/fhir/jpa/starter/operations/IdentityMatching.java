@@ -18,10 +18,18 @@ import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 
 public class IdentityMatching {
+
+	private final String IDI_Patient_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient";
+	private final String IDI_Patient_L0_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L0";
+	private final String IDI_Patient_L1_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L1";
+	private boolean assertIDIPatientProfile = false;
+	private boolean assertIDIPatientL0Profile = false;
+	private boolean assertIDIPatientL1Profile = false;
 
 	/**
 	 * Returns welcome message for a customer by customer name and location
@@ -44,6 +52,16 @@ public class IdentityMatching {
 		FhirContext ctx = FhirContextProvider.getFhirContext();
 		IGenericClient client = ctx.newRestfulGenericClient("http://localhost:8080/fhir/"); //TODO: pull from config
 
+		//check profile assertions
+		List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
+		for(CanonicalType profile : metaProfiles) {
+			switch(profile.getValue()) {
+				case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
+				case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
+				case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
+			}
+		}
+
 		//build out identifier search params and base identifier params by traversing the identifiers
 		List<IdentifierQueryParams> identifierParams = new ArrayList<>();
 		List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
@@ -58,7 +76,7 @@ public class IdentityMatching {
 					codings.stream().findFirst().get().getCode()
 				));
 
-				baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));			;
+				baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));
 
 			}
 		});
@@ -100,18 +118,15 @@ public class IdentityMatching {
 		}
 
 		//check for address if present
-//		if(patient.hasAddress())
-//			for (Address x : patient.getAddress()) {
-//				if (x.hasLine() && x.hasLine()) {
-//					patientQuery.where(Patient.ADDRESS.contains().values(StringUtils.join(x.getLine(), " ")));
-//				}
-//				if (x.hasCity() && x.hasCity()) {
-//					patientQuery.where(Patient.ADDRESS_CITY.matchesExactly().value(x.getCity()));
-//				}
-//				if (x.hasPostalCode() && x.hasPostalCode()) {
-//					patientQuery.where(Patient.ADDRESS_POSTALCODE.matchesExactly().value(x.getPostalCode()));
-//				}
-//			}
+		if(patient.hasAddress())
+			for (Address x : patient.getAddress()) {
+				List<String> addressValues = new ArrayList<>();
+				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
+				addressValues.add(x.getCity());
+				addressValues.add(x.getState());
+				addressValues.add(x.getPostalCode());
+				patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
+			}
 
 		//check telecom if present
 		if(patient.hasTelecom())
@@ -188,6 +203,20 @@ public class IdentityMatching {
 				scorer.setBirthDateMatch(true);
 			}
 
+			//score addresses
+			if(patient.hasAddress() && patientEntry.hasAddress()) {
+				for(Address epAddress : patientEntry.getAddress()) {
+					for(Address rpAddress : patient.getAddress()) {
+						if(rpAddress.getLine().stream().anyMatch(new HashSet<>(epAddress.getLine())::contains)) {
+							scorer.setAddressLineMatch(true);
+						}
+						if(rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
+						if(rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
+						if(rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
+					}
+				}
+			}
+
 			//score telecom
 			if(patient.hasTelecom() && patientEntry.hasTelecom()) {
 				for (ContactPoint com : patientEntry.getTelecom()) {
@@ -206,10 +235,29 @@ public class IdentityMatching {
 			searchComp.setScore(scorer.scoreMatch());
 
 			//Add extension to place match messages
-			Extension ext = new Extension();
-			ext.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching#match-messages-extension");
-			ext.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
-			searchComp.addExtension(ext);
+			Extension extExplanation = new Extension();
+			extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching#match-messages-extension");
+			extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
+			searchComp.addExtension(extExplanation);
+
+			//set profile and weight extensions for testing
+			if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
+				Integer scoredWeight = scorer.getMatchWeight();
+				Extension extAssertion = new Extension();
+				extAssertion.setUrl("#assertion");
+				if(assertIDIPatientProfile) {
+					extAssertion.setValue(new StringType("Profile " + IDI_Patient_Profile + ": Match weight " + scoredWeight + "  passes profile assertion."));
+				}
+				else if(assertIDIPatientL0Profile) {
+					extAssertion.setValue(new StringType("Profile " + IDI_Patient_L0_Profile + ": Match weight " + scoredWeight + (scoredWeight >= 10 ? " passes profile assertion." : " fails profile assertion, weight score must be >= 10.")));
+				}
+				else if(assertIDIPatientL1Profile) {
+					extAssertion.setValue(new StringType("Profile " + IDI_Patient_L1_Profile + ": Match weight " + scoredWeight + (scoredWeight >= 20 ? " passes profile assertion." : " fails profile assertion, weight score must be >= 20.")));
+				}
+				searchComp.addExtension(extAssertion);
+			}
+
+
 
 			pf.setSearch(searchComp);
 
