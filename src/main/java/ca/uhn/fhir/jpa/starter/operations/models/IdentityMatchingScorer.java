@@ -11,8 +11,10 @@ public class IdentityMatchingScorer {
 	private boolean _genderMatch;
 	private boolean _birthDateMatch;
 	private boolean _phoneNumberMatch;
+	private boolean _emailMatch;
 	private boolean _addressLineMatch;
 	private boolean _addressCityMatch;
+	private boolean _addressStateMatch;
 	private boolean _addressPostalCodeMatch;
 
 	public IdentityMatchingScorer() { }
@@ -28,8 +30,10 @@ public class IdentityMatchingScorer {
 		boolean GenderMatch,
 		boolean BirthDateMatch,
 		boolean PhoneNumberMatch,
+		boolean EmailMatch,
 		boolean AddressLineMatch,
 		boolean AddressCityMatch,
+		boolean AddressStateMatch,
 		boolean AddressPostalCodeMatch
 	)
 	{
@@ -43,14 +47,40 @@ public class IdentityMatchingScorer {
 		_genderMatch = GenderMatch;
 		_birthDateMatch = BirthDateMatch;
 		_phoneNumberMatch = PhoneNumberMatch;
+		_emailMatch = EmailMatch;
 		_addressLineMatch = AddressLineMatch;
 		_addressCityMatch = AddressCityMatch;
+		_addressStateMatch = AddressStateMatch;
 		_addressPostalCodeMatch = AddressPostalCodeMatch;
 	}
 
+	// Grading based on table found http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html#scoring-matches--responders-system-match-output-quality-score
 	public double scoreMatch() {
 
-		return 0;
+		if(
+			(_mrnMatch) ||
+			(_givenNameMatch && _familyNameMatch && _driversLicenseMatch) ||
+			(_givenNameMatch && _familyNameMatch && _passportMatch) ||
+			(_givenNameMatch && _familyNameMatch && _insuranceIdentifierMatch) ||
+			(_givenNameMatch && _familyNameMatch && _ssnMatch)
+		) { return .99; }
+		else if (
+			(_givenNameMatch && _familyNameMatch && _insuranceIdentifierMatch) ||
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _addressLineMatch && _addressPostalCodeMatch) ||
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _addressLineMatch && _addressCityMatch && _addressStateMatch) ||
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _emailMatch)
+		) { return .80; }
+		else if (
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _phoneNumberMatch) ||
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _genderMatch && _addressPostalCodeMatch)
+		) { return .70; }
+		else if (
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _genderMatch) ||
+			(_givenNameMatch && _familyNameMatch && _birthDateMatch)
+		) { return .60; }
+		else {
+			return .10;
+		}
 	}
 
 	//properties

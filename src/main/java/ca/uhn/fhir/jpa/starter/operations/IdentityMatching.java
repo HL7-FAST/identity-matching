@@ -3,6 +3,7 @@ package ca.uhn.fhir.jpa.starter.operations;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
+import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
@@ -123,15 +124,43 @@ public class IdentityMatching {
 		//TODO: Grade results
 		for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
 		{
+			IdentityMatchingScorer scorer = new IdentityMatchingScorer();
 			Patient patientEntry = (Patient)pf.getResource();
 
+			//score identifiers
 			if(patientEntry.hasIdentifier())
 			{
-				Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
-				searchComp.setMode(Bundle.SearchEntryMode.MATCH);
-				searchComp.setScore(.99);
-				pf.setSearch(searchComp);
+				List<Identifier> identifiers = patientEntry.getIdentifier();
+				for(IdentifierQueryParams id : identifierParams) {
+					identifiers.stream().forEach(x -> {
+						if(x.getSystem().equals(id.getIdentifierSystem()) && x.getValue().equals(id.getIdentifierValue())) {
+							//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
+							//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
+							switch (id.getIdentifierCode()) {
+								case("MR"): { scorer.setMrnMatch(true); } break;
+								case("DL"): { scorer.setDriversLicenseMatch(true); } break;
+								case("PPN"): { scorer.setPassportMatch(true); } break;
+								case("SB"): { scorer.setSSNMatch(true); } break;
+							}
+						}
+					});
+				}
 			}
+
+			//score gender
+			if(patientEntry.hasGender() && patient.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
+				scorer.setGenderMatch(true);
+			}
+
+			//score birthdate
+			if(patientEntry.hasBirthDate() && patient.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
+				scorer.setBirthDateMatch(true);
+			}
+
+			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
+			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
+			searchComp.setScore(scorer.scoreMatch());
+			pf.setSearch(searchComp);
 
 		}
 
