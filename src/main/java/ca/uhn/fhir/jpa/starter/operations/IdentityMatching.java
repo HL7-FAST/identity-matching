@@ -183,9 +183,15 @@ public class IdentityMatching {
 
 					//check given names
 					for(StringType givenName : name.getGiven()) {
-						if(patientRef.getGiven().contains(givenName)) {
-							scorer.setGivenNameMatch(true);
+						for(StringType refName : patientRef.getGiven()) {
+							if(refName.toString().equals(givenName.toString())) {
+								scorer.setGivenNameMatch(true);
+							}
 						}
+
+//						if(patientRef.getGiven().contains(givenName)) {
+//							scorer.setGivenNameMatch(true);
+//						}
 					}
 
 					//TODO: Add middle name/initial
