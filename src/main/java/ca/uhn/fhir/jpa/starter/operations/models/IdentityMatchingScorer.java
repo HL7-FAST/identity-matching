@@ -6,22 +6,6 @@ import java.util.stream.Collectors;
 
 public class IdentityMatchingScorer {
 
-	private final String MedicalRecordNumberMatchMsg = "A matching medical record number was found.";
-	private final String PassportNumberMatchMsg = "A matching passport number was found.";
-	private final String DriversLicenseMatchMsg = "A matching drivers license number was found.";
-	private final String SocialSecurityNumberMatchMsg = "A matching social security number was found.";
-	private final String InsuranceIdentificationMatchMsg = "A matching insurance identification was found.";
-	private final String FamilyNameMatchMsg = "A matching last name was found.";
-	private final String GivenNameMatchMsg = "A matching first name was found.";
-	private final String GenderMatchMsg = "A matching gender was found.";
-	private final String BirthDateMatchMsg = "A matching birthdate was found.";
-	private final String PhoneNumberMatchMsg = "A matching phone number was found.";
-	private final String EmailMatchMsg = "A matching email address was found.";
-	private final String AddressLineMatchMsg = "A matching address line of residence was found.";
-	private final String AddressCityMatchMsg = "A matching city of residence was found.";
-	private final String AddressStateMatchMsg = "A matching state of residence was found";
-	private final String PostalCodeMatchMsg = "A matching postal code of residence was found.";
-
 	private boolean _ssnMatch;
 	private boolean _mrnMatch;
 	private boolean _driversLicenseMatch;
@@ -114,84 +98,105 @@ public class IdentityMatchingScorer {
 	//properties
 	public boolean getSSNMatch() { return _ssnMatch; }
 	public void setSSNMatch(boolean value) {
+		final String SocialSecurityNumberMatchMsg = "A matching social security number was found.";
 		this._ssnMatch = value;
 		if(value) { matchMessages.add(SocialSecurityNumberMatchMsg); }
 	}
 
 	public boolean getMrnMatch() { return _mrnMatch; }
 	public void setMrnMatch(boolean value) {
+		final String MedicalRecordNumberMatchMsg = "A matching medical record number was found.";
 		this._mrnMatch = value;
 		if(value) { matchMessages.add(MedicalRecordNumberMatchMsg); }
 	}
 
 	public boolean getDriversLicenseMatch() { return _driversLicenseMatch; }
 	public void setDriversLicenseMatch(boolean value) {
+		final String DriversLicenseMatchMsg = "A matching drivers license number was found.";
 		this._driversLicenseMatch = value;
 		if(value) { matchMessages.add(DriversLicenseMatchMsg); }
 	}
 
 	public boolean getPassportMatch() { return _passportMatch; }
 	public void setPassportMatch(boolean value) {
+		final String PassportNumberMatchMsg = "A matching passport number was found.";
 		this._passportMatch = value;
 		if(value) { matchMessages.add(PassportNumberMatchMsg); }
 	}
 
 	public boolean getInsuranceIdentifierMatch() { return _insuranceIdentifierMatch; }
 	public void setInsuranceIdentifierMatch(boolean value) {
+		final String InsuranceIdentificationMatchMsg = "A matching insurance identification was found.";
 		this._insuranceIdentifierMatch = value;
 		if(value) { matchMessages.add(InsuranceIdentificationMatchMsg); }
 	}
 
 	public boolean getFamilyNameMatch() { return _familyNameMatch; }
 	public void setFamilyNameMatch(boolean value) {
+		final String FamilyNameMatchMsg = "A matching last name was found.";
 		this._familyNameMatch = value;
 		if(value) { matchMessages.add(FamilyNameMatchMsg); }
 	}
 
 	public boolean getGivenNameMatch() { return _givenNameMatch; }
 	public void setGivenNameMatch(boolean value) {
+		final String GivenNameMatchMsg = "A matching first name was found.";
 		this._givenNameMatch = value;
 		if(value) { matchMessages.add(GivenNameMatchMsg); }
 	}
 
 	public boolean getGenderMatch() { return _genderMatch; }
 	public void setGenderMatch(boolean value) {
+		final String GenderMatchMsg = "A matching gender was found.";
 		this._genderMatch = value;
 		if(value) { matchMessages.add(GenderMatchMsg); }
 	}
 
 	public boolean getBirthDateMatch() { return _birthDateMatch; }
 	public void setBirthDateMatch(boolean value) {
+		final String BirthDateMatchMsg = "A matching birthdate was found.";
 		this._birthDateMatch = value;
 		if(value) { matchMessages.add(BirthDateMatchMsg); }
 	}
 
 	public boolean getPhoneNumberMatch() { return _phoneNumberMatch; }
 	public void setPhoneNumberMatch(boolean value) {
+		final String PhoneNumberMatchMsg = "A matching phone number was found.";
 		this._phoneNumberMatch = value;
 		if(value) { matchMessages.add(PhoneNumberMatchMsg); }
 	}
 
+	public boolean getEmailMatch() { return _emailMatch; }
+	public void setEmailMatch(boolean value) {
+		final String EmailMatchMsg = "A matching email address was found.";
+		this._emailMatch = value;
+		if(value) { matchMessages.add(EmailMatchMsg); }
+	}
+
 	public boolean getAddressLineMatch() { return _addressLineMatch; }
 	public void setAddressLineMatch(boolean value) {
+		final String AddressLineMatchMsg = "A matching address line of residence was found.";
 		this._addressLineMatch = value;
 		if(value) { matchMessages.add(AddressLineMatchMsg); }
 	}
 
 	public boolean getAddressCityMatch() { return _addressCityMatch; }
 	public void setAddressCityMatch(boolean value) {
+		final String AddressCityMatchMsg = "A matching city of residence was found.";
 		this._addressCityMatch = value;
 		if(value) { matchMessages.add(AddressCityMatchMsg); }
 	}
 
 	public boolean getAddressStateMatch() { return _addressStateMatch; }
 	public void setAddressStateMatch(boolean value) {
+		final String AddressStateMatchMsg = "A matching state of residence was found";
 		this._addressStateMatch = value;
 		if(value) { matchMessages.add(AddressStateMatchMsg); }
 	}
 
 	public boolean getAddressPostalCodeMatch() { return _addressPostalCodeMatch; }
 	public void setAddressPostalCodeMatch(boolean value) {
+		final String PostalCodeMatchMsg = "A matching postal code of residence was found.";
 		this._addressPostalCodeMatch = value;
 		if(value) { matchMessages.add(PostalCodeMatchMsg); }
 	}

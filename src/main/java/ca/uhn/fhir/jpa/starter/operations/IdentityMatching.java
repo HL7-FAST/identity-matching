@@ -4,6 +4,7 @@ import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
+import ca.uhn.fhir.model.api.ExtensionDt;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
@@ -11,11 +12,14 @@ import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.IQuery;
+import ca.uhn.fhir.rest.gclient.StringClientParam;
+import ca.uhn.fhir.rest.param.TokenParam;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class IdentityMatching {
 
@@ -81,6 +85,8 @@ public class IdentityMatching {
 			patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
 		}
 
+		//TODO: Add middle name/initial
+
 		//check for birthdate if present
 		if(patient.hasBirthDate())
 		{
@@ -94,41 +100,44 @@ public class IdentityMatching {
 		}
 
 		//check for address if present
-		if(patient.hasAddress())
-			for (Address x : patient.getAddress()) {
-				if (x.hasLine()) {
-					patientQuery.where(Patient.ADDRESS.contains().values(StringUtils.join(x.getLine(), " ")));
-				}
-				if (x.hasCity()) {
-					patientQuery.where(Patient.ADDRESS_CITY.matchesExactly().value(x.getCity()));
-				}
-				if (x.hasPostalCode()) {
-					patientQuery.where(Patient.ADDRESS_POSTALCODE.matchesExactly().value(x.getPostalCode()));
-				}
-			}
+//		if(patient.hasAddress())
+//			for (Address x : patient.getAddress()) {
+//				if (x.hasLine() && x.hasLine()) {
+//					patientQuery.where(Patient.ADDRESS.contains().values(StringUtils.join(x.getLine(), " ")));
+//				}
+//				if (x.hasCity() && x.hasCity()) {
+//					patientQuery.where(Patient.ADDRESS_CITY.matchesExactly().value(x.getCity()));
+//				}
+//				if (x.hasPostalCode() && x.hasPostalCode()) {
+//					patientQuery.where(Patient.ADDRESS_POSTALCODE.matchesExactly().value(x.getPostalCode()));
+//				}
+//			}
 
 		//check telecom if present
 		if(patient.hasTelecom())
 		{
 			for (ContactPoint x : patient.getTelecom()) {
-				if (x.getSystem().equals(ContactPoint.ContactPointSystem.PHONE)) {
-					patientQuery.where(Patient.TELECOM.exactly().systemAndValues(ContactPoint.ContactPointSystem.PHONE.toCode(), x.getValue()));
-				} else if (x.getSystem().equals(ContactPoint.ContactPointSystem.EMAIL)) {
-					patientQuery.where(Patient.TELECOM.exactly().systemAndValues(ContactPoint.ContactPointSystem.EMAIL.toCode(), x.getValue()));
+				if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+					StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
+					patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
+				} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+					StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
+					patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
 				}
 			}
 		}
 
 		Bundle foundPatients = patientQuery.execute();
 
-		//TODO: Grade results
+		//Loop through results and grade matches
 		for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
 		{
 			IdentityMatchingScorer scorer = new IdentityMatchingScorer();
+			List<String> scorerNotes = new ArrayList<>();
 			Patient patientEntry = (Patient)pf.getResource();
 
 			//score identifiers
-			if(patientEntry.hasIdentifier())
+			if(patient.hasIdentifier() && patientEntry.hasIdentifier())
 			{
 				List<Identifier> identifiers = patientEntry.getIdentifier();
 				for(IdentifierQueryParams id : identifierParams) {
@@ -137,7 +146,7 @@ public class IdentityMatching {
 							//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
 							//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
 							switch (id.getIdentifierCode()) {
-								case("MR"): { scorer.setMrnMatch(true); } break;
+								case("MR"): { scorer.setMrnMatch(true);  } break;
 								case("DL"): { scorer.setDriversLicenseMatch(true); } break;
 								case("PPN"): { scorer.setPassportMatch(true); } break;
 								case("SB"): { scorer.setSSNMatch(true); } break;
@@ -147,19 +156,61 @@ public class IdentityMatching {
 				}
 			}
 
+			//score names
+			if(patient.hasName() && patientEntry.hasName()) {
+				for(HumanName name : patientEntry.getName()) {
+					HumanName patientRef = patient.getName().get(0);
+
+					//check family name
+					if(patientRef.getFamily().equals(name.getFamily())) {
+						scorer.setFamilyNameMatch(true);
+					}
+
+					//check given names
+					for(StringType givenName : name.getGiven()) {
+						if(patientRef.getGiven().contains(givenName)) {
+							scorer.setGivenNameMatch(true);
+						}
+					}
+
+					//TODO: Add middle name/initial
+
+				}
+			}
+
 			//score gender
-			if(patientEntry.hasGender() && patient.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
+			if(patient.hasGender() && patientEntry.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
 				scorer.setGenderMatch(true);
 			}
 
 			//score birthdate
-			if(patientEntry.hasBirthDate() && patient.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
+			if(patient.hasBirthDate() && patientEntry.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
 				scorer.setBirthDateMatch(true);
+			}
+
+			//score telecom
+			if(patient.hasTelecom() && patientEntry.hasTelecom()) {
+				for (ContactPoint com : patientEntry.getTelecom()) {
+					if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+						scorer.setPhoneNumberMatch(true);
+					}
+					else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+						scorer.setEmailMatch(true);
+					}
+
+				}
 			}
 
 			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
 			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
 			searchComp.setScore(scorer.scoreMatch());
+
+			//Add extension to place match messages
+			Extension ext = new Extension();
+			ext.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching#match-messages-extension");
+			ext.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
+			searchComp.addExtension(ext);
+
 			pf.setSearch(searchComp);
 
 		}
