@@ -46,6 +46,10 @@ public class IdentityMatching {
 	)
 	{
 
+		assertIDIPatientProfile = false;
+		assertIDIPatientL0Profile = false;
+		assertIDIPatientL1Profile = false;
+
 		FhirContext ctx = FhirContextProvider.getFhirContext();
 		IGenericClient client = ctx.newRestfulGenericClient("http://localhost:8080/fhir/"); //TODO: pull from config
 
@@ -246,18 +250,9 @@ public class IdentityMatching {
 
 			//set profile and weight extensions for testing
 			if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
-				Integer scoredWeight = scorer.getMatchWeight();
 				Extension extAssertion = new Extension();
-				extAssertion.setUrl("#assertion");
-				if(assertIDIPatientProfile) {
-					extAssertion.setValue(new StringType("Profile " + IDI_Patient_Profile + ": Match weight " + scoredWeight + "  passes profile assertion."));
-				}
-				else if(assertIDIPatientL0Profile) {
-					extAssertion.setValue(new StringType("Profile " + IDI_Patient_L0_Profile + ": Match weight " + scoredWeight + (scoredWeight >= 10 ? " passes profile assertion." : " fails profile assertion, weight score must be >= 10.")));
-				}
-				else if(assertIDIPatientL1Profile) {
-					extAssertion.setValue(new StringType("Profile " + IDI_Patient_L1_Profile + ": Match weight " + scoredWeight + (scoredWeight >= 20 ? " passes profile assertion." : " fails profile assertion, weight score must be >= 20.")));
-				}
+				extAssertion.setUrl("#ProfileAssertion: " + getProfileAssertion());
+				extAssertion.setValue(new StringType("Supplied patient reference" + (gradePatientReference(patient) ? " passed " : " failed ") + "profile assertion."));
 				searchComp.addExtension(extAssertion);
 			}
 
@@ -266,6 +261,111 @@ public class IdentityMatching {
 		}
 
 		return foundPatients;
+	}
+
+	private String getProfileAssertion() {
+		if(assertIDIPatientProfile) {
+			return IDI_Patient_Profile;
+		}
+		else if(assertIDIPatientL0Profile) {
+			return  IDI_Patient_L0_Profile;
+		}
+		else if(assertIDIPatientL1Profile) {
+			return IDI_Patient_L1_Profile;
+		}
+
+		return "No profile provided";
+	}
+
+	private boolean gradePatientReference(Patient referencePatient) {
+		IdentityMatchingScorer refScorer = new IdentityMatchingScorer();
+
+		//score identifiers
+		if(referencePatient.hasIdentifier())
+		{
+			for(Identifier id : referencePatient.getIdentifier()) {
+				for(Coding code : id.getType().getCoding()) {
+					switch(code.getCode()) {
+						case("MR"): { refScorer.setMrnMatch(true);  } break;
+						case("DL"): { refScorer.setDriversLicenseMatch(true); } break;
+						case("PPN"): { refScorer.setPassportMatch(true); } break;
+						case("SB"): { refScorer.setSSNMatch(true); } break;
+					}
+
+					//break out of loop if all referenced identifiers are found
+					if(refScorer.getMrnMatch() && refScorer.getDriversLicenseMatch() && refScorer.getPassportMatch() && refScorer.getSSNMatch()) {
+						break;
+					}
+				}
+			}
+		}
+
+		//score names
+		if(referencePatient.hasName()) {
+			for(HumanName name : referencePatient.getName()) {
+				if(name.hasGiven()) { refScorer.setGivenNameMatch(true); }
+				if(name.hasFamily()) { refScorer.setFamilyNameMatch(true); }
+
+				//if given and family name found, break out of for loop
+				if(refScorer.getGivenNameMatch() && refScorer.getFamilyNameMatch()) break;
+			}
+		}
+
+		//score gender
+		if(referencePatient.hasGender()) { refScorer.setGenderMatch(true); }
+
+		//score birthdate
+		if(referencePatient.hasBirthDate()) { refScorer.setBirthDateMatch(true);	}
+
+		//score addresses
+		if(referencePatient.hasAddress()) {
+			for(Address refAddress : referencePatient.getAddress()) {
+
+				//see if address has individual components
+				if(refAddress.hasLine()) {	refScorer.setAddressLineMatch(true); }
+				if(refAddress.hasCity()) { refScorer.setAddressCityMatch(true); }
+				if(refAddress.hasState()) { refScorer.setAddressStateMatch(true);}
+				if(refAddress.hasPostalCode()) { refScorer.setAddressPostalCodeMatch(true);}
+
+				//if all address components found, break out of for loop
+				if(refScorer.getAddressLineMatch() && refScorer.getAddressCityMatch() && refScorer.getAddressStateMatch() && refScorer.getAddressPostalCodeMatch()) {
+					break;
+				}
+
+			}
+		}
+
+		//score telecom
+		if(referencePatient.hasTelecom()) {
+			for (ContactPoint com : referencePatient.getTelecom()) {
+				if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+					refScorer.setPhoneNumberMatch(true);
+				}
+				else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+					refScorer.setEmailMatch(true);
+				}
+
+				//if phone and email  found, break out of for loop
+				if(refScorer.getPhoneNumberMatch() && refScorer.getEmailMatch()) break;
+
+			}
+		}
+
+		Integer scoredWeight = refScorer.getMatchWeight();
+
+		if(assertIDIPatientProfile) {
+			return true;
+		}
+		else if(assertIDIPatientL0Profile) {
+			return scoredWeight >= 10;
+		}
+		else if(assertIDIPatientL1Profile) {
+			return scoredWeight >= 20;
+		}
+		else {
+			return false;
+		}
+
 	}
 
 }
