@@ -83,65 +83,7 @@ public class IdentityMatching {
 		});
 
 		//Dynamically build out patient match query based on provided patient resource
-		IQuery<Bundle> patientQuery = client.search()
-		.forResource(Patient.class)
-		.returnBundle(Bundle.class);
-
-		//Check for identifiers if present
-		if(baseIdentifierParams.size() > 0)
-		{
-			patientQuery.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams));
-		}
-
-		//check for family name if present, choose the most recent (first)
-		if(patient.getName().get(0).getFamily() != null) {
-			patientQuery.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()));
-		}
-
-		//check for given name if present, check joined given names
-		if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
-		{
-			patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
-		}
-
-		//TODO: Add middle name/initial
-
-		//check for birthdate if present
-		if(patient.hasBirthDate())
-		{
-			patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
-		}
-
-		//check gender if present
-		if(patient.hasGender())
-		{
-			patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
-		}
-
-		//check for address if present
-		if(patient.hasAddress())
-			for (Address x : patient.getAddress()) {
-				List<String> addressValues = new ArrayList<>();
-				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
-				addressValues.add(x.getCity());
-				addressValues.add(x.getState());
-				addressValues.add(x.getPostalCode());
-				patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
-			}
-
-		//check telecom if present
-		if(patient.hasTelecom())
-		{
-			for (ContactPoint x : patient.getTelecom()) {
-				if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-					StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
-					patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
-				} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-					StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
-					patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
-				}
-			}
-		}
+		IQuery<Bundle> patientQuery = buildMatchQuery(patient, client, identifierParams, baseIdentifierParams);
 
 		Bundle foundPatients = patientQuery.execute();
 
@@ -228,12 +170,19 @@ public class IdentityMatching {
 			if(patient.hasTelecom() && patientEntry.hasTelecom()) {
 				for (ContactPoint com : patientEntry.getTelecom()) {
 					if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-						scorer.setPhoneNumberMatch(true);
+						for (ContactPoint refCom : patient.getTelecom()) {
+							if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+								if(com.getValue().equals(refCom.getValue())) { scorer.setPhoneNumberMatch(true); }
+							}
+						}
 					}
 					else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-						scorer.setEmailMatch(true);
+						for (ContactPoint refCom : patient.getTelecom()) {
+							if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+								if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
+							}
+						}
 					}
-
 				}
 			}
 
@@ -262,6 +211,75 @@ public class IdentityMatching {
 
 		return foundPatients;
 	}
+
+	private IQuery<Bundle> buildMatchQuery(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
+
+		IQuery<Bundle> patientQuery = client.search()
+			.forResource(Patient.class)
+			.returnBundle(Bundle.class);
+
+		//TODO: build query based on profile assertion
+
+		//Check for identifiers if present
+		if(baseIdentifierParams.size() > 0)
+		{
+			patientQuery.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams));
+		}
+
+		//check for family name if present, choose the most recent (first)
+		if(patient.getName().get(0).getFamily() != null) {
+			patientQuery.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()));
+		}
+
+		//check for given name if present, check joined given names
+		if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
+		{
+			patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
+		}
+
+		//TODO: Add middle name/initial
+
+		//check for birthdate if present
+		if(patient.hasBirthDate())
+		{
+			patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
+		}
+
+		//check gender if present
+		if(patient.hasGender())
+		{
+			patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
+		}
+
+		//check for address if present
+		if(patient.hasAddress())
+			for (Address x : patient.getAddress()) {
+				List<String> addressValues = new ArrayList<>();
+				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
+				addressValues.add(x.getCity());
+				addressValues.add(x.getState());
+				addressValues.add(x.getPostalCode());
+				patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
+			}
+
+		//check telecom if present
+		if(patient.hasTelecom())
+		{
+			for (ContactPoint x : patient.getTelecom()) {
+				if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+					StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
+					patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
+				} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+					StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
+					patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
+				}
+			}
+		}
+
+		return  patientQuery;
+
+	}
+
 
 	private String getProfileAssertion() {
 		if(assertIDIPatientProfile) {
