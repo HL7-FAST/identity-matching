@@ -96,7 +96,7 @@ public class IdentityMatchingScorer {
 	public Integer getMatchWeight() {
 		//check for weighted combinations
 		weight = 0;
-		if(getPassportMatch()) { weight += 0;	}
+		if(getPassportMatch()) { weight += 10;	}
 		if(getDriversLicenseMatch()) { weight += 10; }
 		if(
 			(getAddressLineMatch() && getAddressPostalCodeMatch()) ||

@@ -1,21 +1,30 @@
 package ca.uhn.fhir.jpa.starter.operations;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
+import ca.uhn.fhir.jpa.dao.BaseHapiFhirResourceDao;
+import ca.uhn.fhir.jpa.rp.r4.PatientResourceProvider;
+import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
+import ca.uhn.fhir.model.api.IQueryParameterOr;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
+import ca.uhn.fhir.rest.api.SummaryEnum;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
+import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
 import org.apache.commons.lang3.StringUtils;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
@@ -83,9 +92,10 @@ public class IdentityMatching {
 		});
 
 		//Dynamically build out patient match query based on provided patient resource
-		IQuery<Bundle> patientQuery = buildMatchQuery(patient, client, identifierParams, baseIdentifierParams);
+		//IQuery<Bundle> patientQuery = buildMatchQuery(patient, client, identifierParams, baseIdentifierParams);
 
-		Bundle foundPatients = patientQuery.execute();
+
+		Bundle foundPatients = matchPatients(patient, client, identifierParams, baseIdentifierParams); //patientQuery.execute();
 
 		//Loop through results and grade matches
 		for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
@@ -193,7 +203,7 @@ public class IdentityMatching {
 
 			//Add extension to place match messages
 			Extension extExplanation = new Extension();
-			extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching#match-messages-extension");
+			extExplanation.setUrl("#match-messages-extension: http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching");
 			extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
 			searchComp.addExtension(extExplanation);
 
@@ -212,13 +222,131 @@ public class IdentityMatching {
 		return foundPatients;
 	}
 
-	private IQuery<Bundle> buildMatchQuery(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
+	private List<Bundle.BundleEntryComponent> executeMatchQuery(IGenericClient client, ICriterion criterion) {
 
 		IQuery<Bundle> patientQuery = client.search()
 			.forResource(Patient.class)
 			.returnBundle(Bundle.class);
 
+		return patientQuery.where(criterion).execute().getEntry();
+
+	}
+
+	private boolean uniquePatientMatch(Bundle.BundleEntryComponent newComponent, List<Bundle.BundleEntryComponent> prevComponents) {
+		return prevComponents.stream().anyMatch(x -> x.getFullUrl().equals(newComponent.getFullUrl()));
+	}
+
+	private Bundle matchPatients(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
+
+		Bundle patientBundle = new Bundle();
+
 		//TODO: build query based on profile assertion
+
+		//Check for identifiers if present
+		if(baseIdentifierParams.size() > 0)
+		{
+			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams))) {
+				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+					patientBundle.addEntry(comp);
+				}
+			}
+		}
+
+		//check for family name if present, choose the most recent (first)
+		if(patient.getName().get(0).getFamily() != null) {
+			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()))) {
+				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+					patientBundle.addEntry(comp);
+				}
+			}
+		}
+
+		//check for given name if present, check joined given names
+		if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
+		{
+			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()))) {
+				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+					patientBundle.addEntry(comp);
+				}
+			}
+			//patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
+		}
+
+		//TODO: Add middle name/initial
+
+		//check for birthdate if present
+		if(patient.hasBirthDate())
+		{
+			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.BIRTHDATE.exactly().day(patient.getBirthDate()))) {
+				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+					patientBundle.addEntry(comp);
+				}
+			}
+			//patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
+		}
+
+		//check gender if present
+		if(patient.hasGender())
+		{
+			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.GENDER.exactly().code(patient.getGender().toCode()))) {
+				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+					patientBundle.addEntry(comp);
+				}
+			}
+			//patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
+		}
+
+		//check for address if present
+		if(patient.hasAddress())
+			for (Address x : patient.getAddress()) {
+				List<String> addressValues = new ArrayList<>();
+				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
+				addressValues.add(x.getCity());
+				addressValues.add(x.getState());
+				addressValues.add(x.getPostalCode());
+
+				for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.ADDRESS.contains().values(addressValues))) {
+					if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+						patientBundle.addEntry(comp);
+					}
+				}
+				//patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
+			}
+
+		//check telecom if present
+		if(patient.hasTelecom())
+		{
+			for (ContactPoint x : patient.getTelecom()) {
+				if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+					StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
+					for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, phoneParam.matchesExactly().value(x.getValue()))) {
+						if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+							patientBundle.addEntry(comp);
+						}
+					}
+					//patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
+				} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+					StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
+					for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, emailParam.matchesExactly().value(x.getValue()))) {
+						if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+							patientBundle.addEntry(comp);
+						}
+					}
+					//patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
+				}
+			}
+		}
+
+		return patientBundle;
+
+	}
+
+	//DEPRECATED
+	private IQuery<Bundle> buildMatchQuery(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
+
+		IQuery<Bundle> patientQuery = client.search()
+			.forResource(Patient.class)
+			.returnBundle(Bundle.class);
 
 		//Check for identifiers if present
 		if(baseIdentifierParams.size() > 0)
@@ -236,8 +364,6 @@ public class IdentityMatching {
 		{
 			patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
 		}
-
-		//TODO: Add middle name/initial
 
 		//check for birthdate if present
 		if(patient.hasBirthDate())
