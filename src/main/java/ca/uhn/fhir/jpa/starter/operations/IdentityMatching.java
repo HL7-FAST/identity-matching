@@ -211,7 +211,8 @@ public class IdentityMatching {
 			if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
 				Extension extAssertion = new Extension();
 				extAssertion.setUrl("#ProfileAssertion: " + getProfileAssertion());
-				extAssertion.setValue(new StringType("Supplied patient reference" + (gradePatientReference(patient) ? " passed " : " failed ") + "profile assertion."));
+				IdentityMatchingScorer assertionScore = gradePatientReference(patient);
+				extAssertion.setValue(new StringType("Supplied patient reference" + (passesProfileAssertion(assertionScore) ? " passed " : " failed ") + "profile assertion with a score of " + assertionScore.getMatchWeight() + "."));
 				searchComp.addExtension(extAssertion);
 			}
 
@@ -421,7 +422,7 @@ public class IdentityMatching {
 		return "No profile provided";
 	}
 
-	private boolean gradePatientReference(Patient referencePatient) {
+	private IdentityMatchingScorer gradePatientReference(Patient referencePatient) {
 		IdentityMatchingScorer refScorer = new IdentityMatchingScorer();
 
 		//score identifiers
@@ -495,6 +496,11 @@ public class IdentityMatching {
 			}
 		}
 
+		return refScorer;
+
+	}
+
+	private boolean passesProfileAssertion(IdentityMatchingScorer refScorer) {
 		Integer scoredWeight = refScorer.getMatchWeight();
 
 		if(assertIDIPatientProfile) {
@@ -509,7 +515,6 @@ public class IdentityMatching {
 		else {
 			return false;
 		}
-
 	}
 
 }
