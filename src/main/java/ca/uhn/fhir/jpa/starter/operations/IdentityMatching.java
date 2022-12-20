@@ -2,32 +2,25 @@ package ca.uhn.fhir.jpa.starter.operations;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
-import ca.uhn.fhir.jpa.dao.BaseHapiFhirResourceDao;
-import ca.uhn.fhir.jpa.rp.r4.PatientResourceProvider;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
-import ca.uhn.fhir.model.api.IQueryParameterOr;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
-import ca.uhn.fhir.rest.api.SummaryEnum;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.StringParam;
-import com.google.gson.internal.PreJava9DateFormatProvider;
 import org.apache.commons.lang3.StringUtils;
-import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
@@ -105,10 +98,8 @@ public class IdentityMatching {
 		});
 
 		//Dynamically build out patient match query based on provided patient resource
-		//IQuery<Bundle> patientQuery = buildMatchQuery(patient, client, identifierParams, baseIdentifierParams);
-
-		Bundle testBundle = getPatientMatch(patient);
-		Bundle foundPatients = matchPatients(patient, client, identifierParams, baseIdentifierParams); //patientQuery.execute();
+		//Bundle testBundle = getPatientMatch(patient);
+		Bundle foundPatients = matchPatients(patient, client, baseIdentifierParams);
 
 		//Loop through results and grade matches
 		for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
@@ -254,7 +245,7 @@ public class IdentityMatching {
 //
 //	}
 
-	private Bundle matchPatients(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
+	private Bundle matchPatients(Patient patient, IGenericClient client, List<BaseIdentifierDt> baseIdentifierParams) {
 
 		Bundle patientBundle = new Bundle();
 
