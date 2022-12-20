@@ -203,14 +203,14 @@ public class IdentityMatching {
 
 			//Add extension to place match messages
 			Extension extExplanation = new Extension();
-			extExplanation.setUrl("#match-messages-extension: http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching");
+			extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html");
 			extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
 			searchComp.addExtension(extExplanation);
 
 			//set profile and weight extensions for testing
 			if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
 				Extension extAssertion = new Extension();
-				extAssertion.setUrl("#ProfileAssertion: " + getProfileAssertion());
+				extAssertion.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/artifacts.html#structures-resource-profiles");
 				IdentityMatchingScorer assertionScore = gradePatientReference(patient);
 				extAssertion.setValue(new StringType("Supplied patient reference" + (passesProfileAssertion(assertionScore) ? " passed " : " failed ") + "profile assertion with a score of " + assertionScore.getMatchWeight() + "."));
 				searchComp.addExtension(extAssertion);
