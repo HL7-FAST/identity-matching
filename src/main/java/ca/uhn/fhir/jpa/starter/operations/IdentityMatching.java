@@ -15,10 +15,13 @@ import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.SummaryEnum;
+import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
+import ca.uhn.fhir.rest.param.StringParam;
+import com.google.gson.internal.PreJava9DateFormatProvider;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
@@ -36,6 +39,16 @@ public class IdentityMatching {
 	private boolean assertIDIPatientProfile = false;
 	private boolean assertIDIPatientL0Profile = false;
 	private boolean assertIDIPatientL1Profile = false;
+	private String serverAddress;
+	private IFhirResourceDao<Patient> patientDao;
+
+	public void setOrgDao(IFhirResourceDao<Patient> patientDao) {
+		this.patientDao = patientDao;
+	}
+
+	public void setServerAddress(String serverAddress) {
+		this.serverAddress = serverAddress;
+	}
 
 	/**
 	 * Returns welcome message for a customer by customer name and location
@@ -60,7 +73,7 @@ public class IdentityMatching {
 		assertIDIPatientL1Profile = false;
 
 		FhirContext ctx = FhirContextProvider.getFhirContext();
-		IGenericClient client = ctx.newRestfulGenericClient("http://localhost:8080/fhir/"); //TODO: pull from config
+		IGenericClient client = ctx.newRestfulGenericClient(serverAddress);
 
 		//check profile assertions
 		List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
@@ -94,7 +107,7 @@ public class IdentityMatching {
 		//Dynamically build out patient match query based on provided patient resource
 		//IQuery<Bundle> patientQuery = buildMatchQuery(patient, client, identifierParams, baseIdentifierParams);
 
-
+		Bundle testBundle = getPatientMatch(patient);
 		Bundle foundPatients = matchPatients(patient, client, identifierParams, baseIdentifierParams); //patientQuery.execute();
 
 		//Loop through results and grade matches
@@ -236,6 +249,10 @@ public class IdentityMatching {
 	private boolean uniquePatientMatch(Bundle.BundleEntryComponent newComponent, List<Bundle.BundleEntryComponent> prevComponents) {
 		return prevComponents.stream().anyMatch(x -> x.getFullUrl().equals(newComponent.getFullUrl()));
 	}
+
+//	private Bundle matchPatientsDOA(Patient patient, List<BaseIdentifierDt> baseIdentifierParams) {
+//
+//	}
 
 	private Bundle matchPatients(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
 
@@ -515,6 +532,37 @@ public class IdentityMatching {
 		else {
 			return false;
 		}
+	}
+
+
+	//TESTING DOA
+	private Bundle getPatientMatch(Patient refPatient) {
+		Bundle retBundle = new Bundle();
+		SearchParameterMap searchMap = new SearchParameterMap();
+		searchMap.add(Patient.SP_GIVEN, new StringParam(refPatient.getName().get(0).getGivenAsSingleString()));
+
+		IBundleProvider patientResults = patientDao.search(searchMap);
+
+		patientResults.getResources(0, patientResults.size())
+			.stream().map(Patient.class::cast)
+			.forEach(o -> retBundle.addEntry(this.createBundleEntry(o)));
+
+		return null;
+
+	}
+
+	private Bundle.BundleEntryComponent createBundleEntry(Patient patient) {
+		Bundle.BundleEntryComponent entry = new Bundle.BundleEntryComponent();
+		entry.setResource(patient);
+		if (this.serverAddress != null && !this.serverAddress.isEmpty()) {
+			try {
+				// Setting the fullUrl only works if there is a server address, which is only set when deploying with an application.yml file; it is not present when debugging in IntelliJ/Eclipse.
+				String fullUrl = this.serverAddress;
+				fullUrl += (!fullUrl.endsWith("/") ? "/" : "") + patient.getId();
+				entry.setFullUrl(fullUrl);
+			} catch (Exception ex) { }
+		}
+		return entry;
 	}
 
 }

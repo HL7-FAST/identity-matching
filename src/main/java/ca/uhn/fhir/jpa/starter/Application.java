@@ -1,11 +1,14 @@
 package ca.uhn.fhir.jpa.starter;
 
 import ca.uhn.fhir.batch2.jobs.config.Batch2JobsConfig;
+import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.batch2.JpaBatch2Config;
 import ca.uhn.fhir.jpa.starter.annotations.OnEitherVersion;
 import ca.uhn.fhir.jpa.starter.common.FhirTesterConfig;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
+import ca.uhn.fhir.jpa.starter.operations.models.CustomHapiProperties;
+import ca.uhn.fhir.jpa.starter.resourceproviders.PatientMatchResourceProvider;
 import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.SubscriptionProcessorConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.WebsocketDispatcherConfig;
@@ -39,6 +42,16 @@ import org.springframework.web.servlet.DispatcherServlet;
 })
 public class Application extends SpringBootServletInitializer {
 
+	@Autowired
+	DaoRegistry daoRegistry;
+
+	public DaoRegistry getDaoRegistry() {
+		return this.daoRegistry;
+	}
+
+	@Autowired
+	CustomHapiProperties customHapiProperties;
+
   public static void main(String[] args) {
 
     SpringApplication.run(Application.class, args);
@@ -61,7 +74,10 @@ public class Application extends SpringBootServletInitializer {
   public ServletRegistrationBean hapiServletRegistration(RestfulServer restfulServer) {
 
 	  //add custom operations
-	  restfulServer.registerProviders(new IdentityMatching());
+	  IdentityMatching identityMatcher = new IdentityMatching();
+	  identityMatcher.setOrgDao(this.getDaoRegistry().getResourceDao("Patient"));
+	  identityMatcher.setServerAddress(this.customHapiProperties.getFhirBase());
+	  restfulServer.registerProviders(identityMatcher);
 
     ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean();
     beanFactory.autowireBean(restfulServer);

@@ -51,6 +51,7 @@ spring:
 #      hibernate.search.backend.type: elasticsearch
 #      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticAnalysisConfigurer
 hapi:
+  fhir-base: "http://localhost:8080/fhir/"
   fhir:
     ### This enables the swagger-ui at /fhir/swagger-ui/index.html as well as the /fhir/api-docs (see https://hapifhir.io/hapi-fhir/docs/server_plain/openapi.html)
     openapi_enabled: true
