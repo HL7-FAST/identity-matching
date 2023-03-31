@@ -9,7 +9,7 @@ import javax.servlet.http.HttpServlet;
 import java.io.IOException;
 
 @RestController
-@RequestMapping("sec/.well-known")
+@RequestMapping("sec")
 public class UnHapiServlet extends HttpServlet  {
 
 	private static final Logger _Logger = LoggerFactory.getLogger(UnHapiServlet.class);
@@ -19,7 +19,7 @@ public class UnHapiServlet extends HttpServlet  {
 		_Logger.info("Initializing UnHapi resful server.");
 	}
 
-	@RequestMapping(value = "/udap", produces = "application/json", method = RequestMethod.GET)
+	@RequestMapping(value = "/.well-known/udap", produces = "application/json", method = RequestMethod.GET)
 	public String getDiscover() throws IOException {
 		try {
 			String test = "Did this work?";

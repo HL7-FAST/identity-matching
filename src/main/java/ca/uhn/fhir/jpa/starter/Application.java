@@ -5,6 +5,7 @@ import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.batch2.JpaBatch2Config;
 import ca.uhn.fhir.jpa.starter.annotations.OnEitherVersion;
 import ca.uhn.fhir.jpa.starter.common.FhirTesterConfig;
+import ca.uhn.fhir.jpa.starter.identitymatching.DiscoveryInterceptor;
 import ca.uhn.fhir.jpa.starter.identitymatching.UnHapiServlet;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
@@ -30,7 +31,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.DispatcherServlet;
 
-@ServletComponentScan(basePackageClasses = {RestfulServer.class, UnHapiServlet.class})
+@ServletComponentScan(basePackageClasses = {RestfulServer.class}) //, UnHapiServlet.class
 @SpringBootApplication(exclude = {ElasticsearchRestClientAutoConfiguration.class})
 @Import({
 	SubscriptionSubmitterConfig.class,
@@ -70,23 +71,6 @@ public class Application extends SpringBootServletInitializer {
   @Autowired
   AutowireCapableBeanFactory beanFactory;
 
-	@Bean
-	public ServletRegistrationBean notHapiServletRegistration(){
-
-//		ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean<>(new UnHapiServlet());
-//		servletRegistrationBean.setLoadOnStartup(1);
-
-		ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean<>();
-		DispatcherServlet dispatcherServlet = new DispatcherServlet();
-		AnnotationConfigWebApplicationContext applicationContext = new AnnotationConfigWebApplicationContext();
-		applicationContext.register(UnHapiServlet.class);
-		dispatcherServlet.setApplicationContext(applicationContext);
-		servletRegistrationBean.setServlet(dispatcherServlet);
-		servletRegistrationBean.setLoadOnStartup(1);
-
-		return servletRegistrationBean;
-	}
-
   @Bean
   @Conditional(OnEitherVersion.class)
   public ServletRegistrationBean hapiServletRegistration(RestfulServer restfulServer) {
@@ -96,6 +80,10 @@ public class Application extends SpringBootServletInitializer {
 	  identityMatcher.setOrgDao(this.getDaoRegistry().getResourceDao("Patient"));
 	  identityMatcher.setServerAddress(this.customHapiProperties.getFhirBase());
 	  restfulServer.registerProviders(identityMatcher);
+
+	  //register FAST security interceptors
+	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor();
+	  restfulServer.registerInterceptor(securityDiscoveryInterceptor);
 
     ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean();
     beanFactory.autowireBean(restfulServer);
