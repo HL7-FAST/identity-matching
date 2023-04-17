@@ -2,14 +2,15 @@ package ca.uhn.fhir.jpa.starter.identitymatching;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
-import org.apache.commons.io.IOUtils;
+import ca.uhn.fhir.jpa.starter.operations.models.DiscoveryObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.util.ResourceUtils;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 @Interceptor
 public class DiscoveryInterceptor
@@ -24,12 +25,13 @@ public class DiscoveryInterceptor
 			_logger.info("Intercepted discovery request, sending security capability statement.");
 
 			//get the discovery results
-			ClassPathResource staticDataResource = new ClassPathResource("discovery-response.json");
-			String staticDataString = IOUtils.toString(staticDataResource.getInputStream(), StandardCharsets.UTF_8);
+			ObjectMapper objectMapper = new ObjectMapper();
+			File discoveryJson = ResourceUtils.getFile("classpath:discovery-response.json");
+			DiscoveryObject myJsonObject = objectMapper.readValue(discoveryJson, DiscoveryObject.class);
 
 			//return the discovery object
 			theResponse.setContentType("application/json");
-			theResponse.getWriter().write(staticDataString);
+			objectMapper.writeValue(theResponse.getOutputStream(), myJsonObject);
 
 			return false;
 		}

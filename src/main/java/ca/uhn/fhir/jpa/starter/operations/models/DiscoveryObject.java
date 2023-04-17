@@ -1,7 +1,11 @@
 package ca.uhn.fhir.jpa.starter.operations.models;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.Getter;
+import lombok.Setter;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Getter
+@Setter
 public class DiscoveryObject {
 	private String[] udap_versions_supported;
 	private String[] udap_profiles_supported;
