@@ -1,5 +1,4 @@
 package ca.uhn.fhir.jpa.starter.operations;
-
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
@@ -9,7 +8,6 @@ import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
 import ca.uhn.fhir.rest.annotation.Operation;
-import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
@@ -19,10 +17,10 @@ import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+
 
 public class IdentityMatching {
 
@@ -46,18 +44,16 @@ public class IdentityMatching {
 	/**
 	 * Returns welcome message for a customer by customer name and location
 	 *
-	 * @param patient - Use this to provide an entire set of patient details for the MPI to match against (e.g. POST a patient record to Patient/$match).
-	 * @param onlyCertainMatches - If there are multiple potential matches, then the match should not return the results with this flag set to true. When false, the server may return multiple results with each result graded accordingly.
-	 * @param count - The maximum number of records to return. If no value is provided, the server decides how many matches to return. Note that clients should be careful when using this, as it may prevent probable - and valid - matches from being returned
+	 * @param params - Use this to provide an entire set of patient details for the MPI to match against (e.g. POST a patient record to Patient/$match).
+	 * If there are multiple potential matches, then the match should not return the results with this flag set to true. When false, the server may return multiple results with each result graded accordingly.
+	 * The maximum number of records to return. If no value is provided, the server decides how many matches to return. Note that clients should be careful when using this, as it may prevent probable - and valid - matches from being returned
 	 * @return -
 	 * A bundle contain a set of Patient records that represent possible matches, optionally it may also contain an OperationOutcome with further information about the search results (such as warnings or information messages, such as a count of records that were close but eliminated) If the operation was unsuccessful, then an OperationOutcome may be returned along with a BadRequest status Code (e.g. security issue, or insufficient properties in patient fragment - check against profile)
 	 * Note: as this is the only out parameter, it is a resource, and it has the name 'return', the result of this operation is returned directly as a resource
 	 */
-	@Operation(name="$match", typeName="Patient", idempotent=true)
+	@Operation(name="$match", typeName="Patient", idempotent=false)
 	public Bundle patientMatchOperation(
-		@ResourceParam Patient patient,
-		@OperationParam(name="onlyCertainMatches") BooleanType onlyCertainMatches,
-		@OperationParam(name="count") IntegerType count
+		@ResourceParam Parameters params
 	)
 	{
 
@@ -68,163 +64,195 @@ public class IdentityMatching {
 		FhirContext ctx = FhirContextProvider.getFhirContext();
 		IGenericClient client = ctx.newRestfulGenericClient(serverAddress);
 
-		//check profile assertions
-		List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
-		for(CanonicalType profile : metaProfiles) {
-			switch(profile.getValue()) {
-				case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
-				case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
-				case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
+		Patient patient = null;
+		boolean onlyCertainMatches = false;
+		IntegerType count;
+		Bundle foundPatients = new Bundle();
+
+		for(var param : params.getParameter()){
+			//if a patient resource, set as patient to search against
+			if(param.getName().equals("resource") && param.getResource().getClass().equals(Patient.class))
+			{
+				patient =(Patient)param.getResource();
 			}
+
+			//check for onlyCertainMatches
+			if(param.getName().equals("onlyCertainMatches"))
+			{
+				onlyCertainMatches = param.getValue().equals("true") ? true : false;
+			}
+
+			//check for count
+			if(param.getName().equals("count"))
+			{
+				count = (IntegerType)param.getValue();
+			}
+
 		}
 
-		//build out identifier search params and base identifier params by traversing the identifiers
-		List<IdentifierQueryParams> identifierParams = new ArrayList<>();
-		List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
-		patient.getIdentifier().stream().forEach(x -> {
-
-			List<Coding> codings = x.getType().getCoding();
-
-			if(codings.size() > 0) {
-				identifierParams.add(new IdentifierQueryParams(
-					x.getSystem(),
-					x.getValue(),
-					codings.stream().findFirst().get().getCode()
-				));
-
-				baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));
-
-			}
-		});
-
-		//Dynamically build out patient match query based on provided patient resource
-		//Bundle testBundle = getPatientMatch(patient);
-		Bundle foundPatients = matchPatients(patient, client, baseIdentifierParams);
-
-		//Loop through results and grade matches
-		for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
+		if(patient != null)
 		{
-			IdentityMatchingScorer scorer = new IdentityMatchingScorer();
-			List<String> scorerNotes = new ArrayList<>();
-			Patient patientEntry = (Patient)pf.getResource();
-
-			//score identifiers
-			if(patient.hasIdentifier() && patientEntry.hasIdentifier())
-			{
-				List<Identifier> identifiers = patientEntry.getIdentifier();
-				for(IdentifierQueryParams id : identifierParams) {
-					identifiers.stream().forEach(x -> {
-						if(x.getSystem().equals(id.getIdentifierSystem()) && x.getValue().equals(id.getIdentifierValue())) {
-							//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
-							//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
-							switch (id.getIdentifierCode()) {
-								case("MR"): { scorer.setMrnMatch(true);  } break;
-								case("DL"): { scorer.setDriversLicenseMatch(true); } break;
-								case("PPN"): { scorer.setPassportMatch(true); } break;
-								case("SB"): { scorer.setSSNMatch(true); } break;
-							}
-						}
-					});
+			//check profile assertions
+			List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
+			for(CanonicalType profile : metaProfiles) {
+				switch(profile.getValue()) {
+					case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
+					case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
+					case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
 				}
 			}
 
-			//score names
-			if(patient.hasName() && patientEntry.hasName()) {
-				for(HumanName name : patientEntry.getName()) {
-					HumanName patientRef = patient.getName().get(0);
+			//build out identifier search params and base identifier params by traversing the identifiers
+			List<IdentifierQueryParams> identifierParams = new ArrayList<>();
+			List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
+			patient.getIdentifier().stream().forEach(x -> {
 
-					//check family name
-					if(patientRef.getFamily().equals(name.getFamily())) {
-						scorer.setFamilyNameMatch(true);
-					}
+				List<Coding> codings = x.getType().getCoding();
 
-					//check given names
-					for(StringType givenName : name.getGiven()) {
-						for(StringType refName : patientRef.getGiven()) {
-							if(refName.toString().equals(givenName.toString())) {
-								scorer.setGivenNameMatch(true);
+				if(codings.size() > 0) {
+					identifierParams.add(new IdentifierQueryParams(
+						x.getSystem(),
+						x.getValue(),
+						codings.stream().findFirst().get().getCode()
+					));
+
+					baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));
+
+				}
+			});
+
+			//Dynamically build out patient match query based on provided patient resource
+			//Bundle testBundle = getPatientMatch(patient);
+			foundPatients = matchPatients(patient, client, baseIdentifierParams);
+
+			//Loop through results and grade matches
+			for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
+			{
+				IdentityMatchingScorer scorer = new IdentityMatchingScorer();
+				List<String> scorerNotes = new ArrayList<>();
+				Patient patientEntry = (Patient)pf.getResource();
+
+				//score identifiers
+				if(patient.hasIdentifier() && patientEntry.hasIdentifier())
+				{
+					List<Identifier> identifiers = patientEntry.getIdentifier();
+					for(IdentifierQueryParams id : identifierParams) {
+						identifiers.stream().forEach(x -> {
+							if(x.getSystem().equals(id.getIdentifierSystem()) && x.getValue().equals(id.getIdentifierValue())) {
+								//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
+								//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
+								switch (id.getIdentifierCode()) {
+									case("MR"): { scorer.setMrnMatch(true);  } break;
+									case("DL"): { scorer.setDriversLicenseMatch(true); } break;
+									case("PPN"): { scorer.setPassportMatch(true); } break;
+									case("SB"): { scorer.setSSNMatch(true); } break;
+								}
 							}
+						});
+					}
+				}
+
+				//score names
+				if(patient.hasName() && patientEntry.hasName()) {
+					for(HumanName name : patientEntry.getName()) {
+						HumanName patientRef = patient.getName().get(0);
+
+						//check family name
+						if(patientRef.getFamily().equals(name.getFamily())) {
+							scorer.setFamilyNameMatch(true);
 						}
+
+						//check given names
+						for(StringType givenName : name.getGiven()) {
+							for(StringType refName : patientRef.getGiven()) {
+								if(refName.toString().equals(givenName.toString())) {
+									scorer.setGivenNameMatch(true);
+								}
+							}
 
 //						if(patientRef.getGiven().contains(givenName)) {
 //							scorer.setGivenNameMatch(true);
 //						}
-					}
-
-					//TODO: Add middle name/initial
-
-				}
-			}
-
-			//score gender
-			if(patient.hasGender() && patientEntry.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
-				scorer.setGenderMatch(true);
-			}
-
-			//score birthdate
-			if(patient.hasBirthDate() && patientEntry.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
-				scorer.setBirthDateMatch(true);
-			}
-
-			//score addresses
-			if(patient.hasAddress() && patientEntry.hasAddress()) {
-				for(Address epAddress : patientEntry.getAddress()) {
-					for(Address rpAddress : patient.getAddress()) {
-						if(rpAddress.getLine().stream().anyMatch(new HashSet<>(epAddress.getLine())::contains)) {
-							scorer.setAddressLineMatch(true);
 						}
-						if(rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
-						if(rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
-						if(rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
+
+						//TODO: Add middle name/initial
+
 					}
 				}
-			}
 
-			//score telecom
-			if(patient.hasTelecom() && patientEntry.hasTelecom()) {
-				for (ContactPoint com : patientEntry.getTelecom()) {
-					if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-						for (ContactPoint refCom : patient.getTelecom()) {
-							if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-								if(com.getValue().equals(refCom.getValue())) { scorer.setPhoneNumberMatch(true); }
+				//score gender
+				if(patient.hasGender() && patientEntry.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
+					scorer.setGenderMatch(true);
+				}
+
+				//score birthdate
+				if(patient.hasBirthDate() && patientEntry.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
+					scorer.setBirthDateMatch(true);
+				}
+
+				//score addresses
+				if(patient.hasAddress() && patientEntry.hasAddress()) {
+					for(Address epAddress : patientEntry.getAddress()) {
+						for(Address rpAddress : patient.getAddress()) {
+							if(rpAddress.getLine().stream().anyMatch(new HashSet<>(epAddress.getLine())::contains)) {
+								scorer.setAddressLineMatch(true);
+							}
+							if(rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
+							if(rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
+							if(rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
+						}
+					}
+				}
+
+				//score telecom
+				if(patient.hasTelecom() && patientEntry.hasTelecom()) {
+					for (ContactPoint com : patientEntry.getTelecom()) {
+						if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+							for (ContactPoint refCom : patient.getTelecom()) {
+								if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+									if(com.getValue().equals(refCom.getValue())) { scorer.setPhoneNumberMatch(true); }
+								}
+							}
+						}
+						else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+							for (ContactPoint refCom : patient.getTelecom()) {
+								if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+									if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
+								}
 							}
 						}
 					}
-					else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-						for (ContactPoint refCom : patient.getTelecom()) {
-							if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-								if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
-							}
-						}
-					}
 				}
+
+				//create bundle search component element
+				Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
+				searchComp.setMode(Bundle.SearchEntryMode.MATCH);
+				searchComp.setScore(scorer.scoreMatch());
+
+				//Add extension to place match messages
+				Extension extExplanation = new Extension();
+				extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html");
+				extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
+				searchComp.addExtension(extExplanation);
+
+				//set profile and weight extensions for testing
+				if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
+					Extension extAssertion = new Extension();
+					extAssertion.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/artifacts.html#structures-resource-profiles");
+					IdentityMatchingScorer assertionScore = gradePatientReference(patient);
+					extAssertion.setValue(new StringType("Supplied patient reference" + (passesProfileAssertion(assertionScore) ? " passed " : " failed ") + "profile assertion with a score of " + assertionScore.getMatchWeight() + "."));
+					searchComp.addExtension(extAssertion);
+				}
+
+				pf.setSearch(searchComp);
+
 			}
-
-			//create bundle search component element
-			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
-			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
-			searchComp.setScore(scorer.scoreMatch());
-
-			//Add extension to place match messages
-			Extension extExplanation = new Extension();
-			extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html");
-			extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
-			searchComp.addExtension(extExplanation);
-
-			//set profile and weight extensions for testing
-			if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
-				Extension extAssertion = new Extension();
-				extAssertion.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/artifacts.html#structures-resource-profiles");
-				IdentityMatchingScorer assertionScore = gradePatientReference(patient);
-				extAssertion.setValue(new StringType("Supplied patient reference" + (passesProfileAssertion(assertionScore) ? " passed " : " failed ") + "profile assertion with a score of " + assertionScore.getMatchWeight() + "."));
-				searchComp.addExtension(extAssertion);
-			}
-
-			pf.setSearch(searchComp);
 
 		}
 
 		return foundPatients;
+
+
 	}
 
 	private List<Bundle.BundleEntryComponent> executeMatchQuery(IGenericClient client, ICriterion criterion) {
