@@ -2,12 +2,14 @@ package ca.uhn.fhir.jpa.starter.identitymatching;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
+import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 
 @Interceptor
 public class DiscoveryInterceptor
@@ -20,9 +22,14 @@ public class DiscoveryInterceptor
 		if (theRequest.getRequestURI().equals("/fhir/.well-known/udap")) {
 
 			_logger.info("Intercepted discovery request, sending security capability statement.");
-			PrintWriter writer = theResponse.getWriter();
-			writer.write("Does this work?\n");
-			writer.close();
+
+			//get the discovery results
+			ClassPathResource staticDataResource = new ClassPathResource("discovery-response.json");
+			String staticDataString = IOUtils.toString(staticDataResource.getInputStream(), StandardCharsets.UTF_8);
+
+			//return the discovery object
+			theResponse.setContentType("application/json");
+			theResponse.getWriter().write(staticDataString);
 
 			return false;
 		}
