@@ -1,18 +1,13 @@
 package ca.uhn.fhir.jpa.starter.resourceproviders;
-
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
-import ca.uhn.fhir.model.api.IQueryParameterOr;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
-import ca.uhn.fhir.rest.annotation.RequiredParam;
 import ca.uhn.fhir.rest.annotation.Search;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.param.*;
 import ca.uhn.fhir.rest.server.IResourceProvider;
-import com.mysql.cj.x.protobuf.MysqlxDatatypes;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
-import org.hl7.fhir.r4.model.codesystems.ContactPointSystem;
 import org.hl7.fhir.r4.model.codesystems.ContactPointUse;
 
 import java.util.List;
@@ -37,14 +32,18 @@ public class PatientMatchResourceProvider  implements IResourceProvider {
 	}
 
 	@Search
-	public List<Patient> getPatientMatch(Patient refPatient, List<BaseIdentifierDt> baseIdentifierParams) {
+	public Bundle getPatientMatch(Patient refPatient, List<BaseIdentifierDt> baseIdentifierParams) {
 		Bundle patientBundle = new Bundle();
 		SearchParameterMap searchMap = new SearchParameterMap();
 
 		//Check for identifiers if present
-		if(baseIdentifierParams.size() > 0)
+		if(baseIdentifierParams.size() > 0 && refPatient.hasIdentifier())
 		{
-
+			StringOrListParam identifierParam = new StringOrListParam();
+			for(Identifier identifier : refPatient.getIdentifier()) {
+				identifierParam.addOr(new StringParam().setValue(identifier.getValue()));
+			}
+			searchMap.add(Patient.SP_IDENTIFIER, identifierParam);
 		}
 
 		//add search parameters for names
@@ -146,7 +145,7 @@ public class PatientMatchResourceProvider  implements IResourceProvider {
 			.stream().map(Patient.class::cast)
 			.forEach(o -> patientBundle.addEntry(this.createBundleEntry(o)));
 
-		return null;
+		return patientBundle;
 
 	}
 

@@ -14,8 +14,7 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
-import ca.uhn.fhir.rest.param.StringOrListParam;
-import ca.uhn.fhir.rest.param.StringParam;
+import ca.uhn.fhir.rest.param.*;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 import java.util.ArrayList;
@@ -123,8 +122,8 @@ public class IdentityMatching {
 			});
 
 			//Dynamically build out patient match query based on provided patient resource
-			Bundle testBundle = getPatientMatch(patient);
-			foundPatients = matchPatients(patient, client, baseIdentifierParams);
+			foundPatients = getPatientMatch(patient);
+			//foundPatients = matchPatients(patient, client, baseIdentifierParams);
 
 			//Loop through results and grade matches
 			for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
@@ -269,10 +268,6 @@ public class IdentityMatching {
 	private boolean uniquePatientMatch(Bundle.BundleEntryComponent newComponent, List<Bundle.BundleEntryComponent> prevComponents) {
 		return prevComponents.stream().anyMatch(x -> x.getFullUrl().equals(newComponent.getFullUrl()));
 	}
-
-//	private Bundle matchPatientsDOA(Patient patient, List<BaseIdentifierDt> baseIdentifierParams) {
-//
-//	}
 
 	private Bundle matchPatients(Patient patient, IGenericClient client, List<BaseIdentifierDt> baseIdentifierParams) {
 
@@ -557,31 +552,120 @@ public class IdentityMatching {
 
 	//TESTING DOA
 	private Bundle getPatientMatch(Patient refPatient) {
-		Bundle retBundle = new Bundle();
+		Bundle patientBundle = new Bundle();
 		SearchParameterMap searchMap = new SearchParameterMap();
-		//searchMap.add(Patient.SP_GIVEN, new StringParam(refPatient.getName().get(0).getGivenAsSingleString()));
+
+		//Check for identifiers if present
+		if(refPatient.hasIdentifier())
+		{
+			TokenOrListParam identifierParam = new TokenOrListParam();
+			for(Identifier identifier : refPatient.getIdentifier()) {
+				identifierParam.addOr(new TokenParam().setValue(identifier.getValue()));
+			}
+			searchMap.add(Patient.IDENTIFIER.getParamName(), identifierParam);
+		}
 
 		//add search parameters for names
-		for(HumanName name : refPatient.getName()) {
-			if(name.hasGiven()){
-				//List<StringParam> givenNameParams = new ArrayList<>();
-				StringOrListParam givenNameParam = new StringOrListParam();
-				for(StringType givenName : name.getGiven()) {
-					//givenNameParams.add(new StringParam().setValue(String.valueOf(givenName)));
-					givenNameParam.addOr(new StringParam().setValue(String.valueOf(givenName)));
+		if(refPatient.hasName()) {
+			StringOrListParam givenNameParam = new StringOrListParam();
+			StringOrListParam familyNameParam = new StringOrListParam();
+			for(HumanName name : refPatient.getName()) {
+				//add search params for given name
+				if(name.hasGiven()){
+					for(StringType givenName : name.getGiven()) {
+						givenNameParam.addOr(new StringParam().setValue(String.valueOf(givenName)));
+					}
 				}
-				searchMap.add(Patient.SP_GIVEN, givenNameParam);
 
+				//add search params for family name
+				if(name.hasFamily()) {
+					familyNameParam.addOr(new StringParam().setValue(name.getFamily()));
+				}
 			}
+			searchMap.add(Patient.GIVEN.getParamName(), givenNameParam);
+			searchMap.add(Patient.FAMILY.getParamName(), familyNameParam);
 		}
+
+		//check for birthdate if present
+		if(refPatient.hasBirthDate())
+		{
+			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(refPatient.getBirthDateElement().getValueAsString()));
+		}
+
+		//check gender if present
+		if(refPatient.hasGender())
+		{
+			TokenParam genderParam = new TokenParam(refPatient.getGender().toCode());
+			searchMap.add(Patient.GENDER.getParamName(), genderParam);
+		}
+
+		//check for address if present
+
+		if(refPatient.hasAddress()) {
+			StringOrListParam lineParams = new StringOrListParam();
+			StringOrListParam cityParams = new StringOrListParam();
+			StringOrListParam stateParams = new StringOrListParam();
+			StringOrListParam postalCodeParams = new StringOrListParam();
+			for (Address address : refPatient.getAddress()) {
+				//only search on home address
+				if(address.hasUse() && address.getUse().equals(Address.AddressUse.HOME)) {
+
+					//capture address line values (house number, apartment number, street name, etc.)
+					if(address.hasLine()){
+						for(StringType line : address.getLine()) {
+							lineParams.addOr(new StringParam(line.asStringValue()));
+						}
+					}
+
+					//capture city params
+					if(address.hasCity()) {
+						cityParams.addOr(new StringParam(address.getCity()));
+					}
+
+					//capture state params
+					if(address.hasState()) {
+						stateParams.addOr(new StringParam(address.getState()));
+					}
+
+					//capture postal code params
+					if(address.hasPostalCode()) {
+						postalCodeParams.addOr(new StringParam(address.getPostalCode()));
+					}
+				}
+			}
+
+			searchMap.add(Patient.ADDRESS.getParamName(), lineParams);
+			searchMap.add(Patient.ADDRESS_CITY.getParamName(), cityParams);
+			searchMap.add(Patient.ADDRESS_STATE.getParamName(), stateParams);
+			searchMap.add(Patient.ADDRESS_POSTALCODE.getParamName(), postalCodeParams);
+		}
+
+		//check telecom if present
+		if(refPatient.hasTelecom()) {
+			StringOrListParam phoneParams = new StringOrListParam();
+			StringOrListParam emailParams = new StringOrListParam();
+			for(ContactPoint contact: refPatient.getTelecom()) {
+				var system = contact.getSystemElement();
+				if(system.equals(ContactPoint.ContactPointSystem.PHONE)
+					&& (contact.getUseElement().equals(ContactPoint.ContactPointUse.HOME) || contact.getUseElement().equals(ContactPoint.ContactPointUse.MOBILE))) {
+					phoneParams.addOr(new StringParam(contact.getValueElement().asStringValue()));
+				}
+				if(system.equals(ContactPoint.ContactPointSystem.EMAIL)) {
+					emailParams.addOr(new StringParam(contact.getValueElement().asStringValue()));
+				}
+			}
+			searchMap.add(Patient.PHONE.getParamName(), phoneParams);
+			searchMap.add(Patient.EMAIL.getParamName(), phoneParams);
+		}
+
 
 		IBundleProvider patientResults = patientDao.search(searchMap);
 
 		patientResults.getResources(0, patientResults.size())
 			.stream().map(Patient.class::cast)
-			.forEach(o -> retBundle.addEntry(this.createBundleEntry(o)));
+			.forEach(o -> patientBundle.addEntry(this.createBundleEntry(o)));
 
-		return null;
+		return patientBundle;
 
 	}
 
