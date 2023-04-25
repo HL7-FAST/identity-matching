@@ -14,6 +14,7 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
+import ca.uhn.fhir.rest.param.StringOrListParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
@@ -122,7 +123,7 @@ public class IdentityMatching {
 			});
 
 			//Dynamically build out patient match query based on provided patient resource
-			//Bundle testBundle = getPatientMatch(patient);
+			Bundle testBundle = getPatientMatch(patient);
 			foundPatients = matchPatients(patient, client, baseIdentifierParams);
 
 			//Loop through results and grade matches
@@ -334,7 +335,7 @@ public class IdentityMatching {
 		}
 
 		//check for address if present
-		if(patient.hasAddress())
+		if(patient.hasAddress()) {
 			for (Address x : patient.getAddress()) {
 				List<String> addressValues = new ArrayList<>();
 				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
@@ -342,14 +343,14 @@ public class IdentityMatching {
 				addressValues.add(x.getState());
 				addressValues.add(x.getPostalCode());
 
-				for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.ADDRESS.contains().values(addressValues))) {
-					if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+				for (Bundle.BundleEntryComponent comp : executeMatchQuery(client, Patient.ADDRESS.contains().values(addressValues))) {
+					if (patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
 						patientBundle.addEntry(comp);
 					}
 				}
 				//patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
 			}
-
+		}
 		//check telecom if present
 		if(patient.hasTelecom())
 		{
@@ -558,7 +559,21 @@ public class IdentityMatching {
 	private Bundle getPatientMatch(Patient refPatient) {
 		Bundle retBundle = new Bundle();
 		SearchParameterMap searchMap = new SearchParameterMap();
-		searchMap.add(Patient.SP_GIVEN, new StringParam(refPatient.getName().get(0).getGivenAsSingleString()));
+		//searchMap.add(Patient.SP_GIVEN, new StringParam(refPatient.getName().get(0).getGivenAsSingleString()));
+
+		//add search parameters for names
+		for(HumanName name : refPatient.getName()) {
+			if(name.hasGiven()){
+				//List<StringParam> givenNameParams = new ArrayList<>();
+				StringOrListParam givenNameParam = new StringOrListParam();
+				for(StringType givenName : name.getGiven()) {
+					//givenNameParams.add(new StringParam().setValue(String.valueOf(givenName)));
+					givenNameParam.addOr(new StringParam().setValue(String.valueOf(givenName)));
+				}
+				searchMap.add(Patient.SP_GIVEN, givenNameParam);
+
+			}
+		}
 
 		IBundleProvider patientResults = patientDao.search(searchMap);
 
