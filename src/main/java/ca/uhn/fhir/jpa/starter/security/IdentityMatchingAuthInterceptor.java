@@ -4,9 +4,18 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
-import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
+
 import javax.naming.AuthenticationException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -14,6 +23,17 @@ import java.io.IOException;
 
 @Interceptor
 public class IdentityMatchingAuthInterceptor {
+	private boolean enableAuthentication = false;
+	private String introspectUrl;
+	private String clientId;
+	private String clientSecret;
+
+	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String introspectUrl, String clientId, String clientSecret) {
+		this.enableAuthentication = enableAuthentication;
+		this.introspectUrl = introspectUrl;
+		this.clientId = clientId;
+		this.clientSecret = clientSecret;
+	}
 
 	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
 
@@ -23,20 +43,40 @@ public class IdentityMatchingAuthInterceptor {
 		//check if request path is an endpoint that needs validation
 		if(request.getRequestURI().equals("/fhir/Patient/$match")) {
 			try {
-				String token = details.getHeader(Constants.HEADER_AUTHORIZATION);
-				if (token == null) {
+				String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
+				if (authHeader == null) {
 					throw new AuthenticationException("Not authorized (no authorization header found in request)");
 				}
-				if (!token.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
+				if (!authHeader.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
 					throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
 				}
 
-				boolean tokenValidated = false; //call introspection here
-				//if token validates
-				if(tokenValidated) {
-					authenticated = true;
-				}
-				else {
+				// Make an HTTP request to the introspection endpoint to validate the access token.
+				RestTemplate restTemplate = new RestTemplate();
+				HttpHeaders headers = new HttpHeaders();
+
+				var token = authHeader.split(" ")[1];
+				MultiValueMap<String, String> requestBody = new LinkedMultiValueMap<>();
+				requestBody.add("token", token);
+				requestBody.add("client_id", clientId);
+				requestBody.add("client_secret", clientSecret);
+
+				HttpEntity<MultiValueMap<String, String>> idpRequest = new HttpEntity<>(requestBody, headers);
+
+				String introspectionUrl = introspectUrl;
+				ResponseEntity<String> idpResponse = restTemplate.postForEntity(introspectionUrl, idpRequest, String.class);
+
+				if (idpResponse.getStatusCode() == HttpStatus.OK) {
+					ObjectMapper objectMapper = new ObjectMapper();
+					JsonNode introspectionResponse = objectMapper.readTree(idpResponse.getBody());
+					boolean isValid = introspectionResponse.get("active").asBoolean();
+					if (isValid) {
+						authenticated = true;
+					} else {
+						authenticated = false;
+					}
+				} else
+				{
 					authenticated = false;
 				}
 
