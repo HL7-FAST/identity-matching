@@ -11,6 +11,7 @@ import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
 import ca.uhn.fhir.jpa.starter.operations.models.CustomHapiProperties;
 import ca.uhn.fhir.jpa.starter.resourceproviders.PatientMatchResourceProvider;
+import ca.uhn.fhir.jpa.starter.security.IdentityMatchingAuthInterceptor;
 import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.SubscriptionProcessorConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.WebsocketDispatcherConfig;
@@ -83,7 +84,9 @@ public class Application extends SpringBootServletInitializer {
 
 	  //register FAST security interceptors
 	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor();
+	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor();
 	  restfulServer.registerInterceptor(securityDiscoveryInterceptor);
+	  restfulServer.registerInterceptor(authInterceptor);
 
     ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean();
     beanFactory.autowireBean(restfulServer);
