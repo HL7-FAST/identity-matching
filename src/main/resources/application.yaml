@@ -5,6 +5,13 @@ management:
     web:
       exposure:
         include: "health,prometheus"
+security:
+  enable-authentication: true
+  introspection-url:
+  client-id:
+  client-secret:
+  protected-endpoints:
+    - "/fhir/Patient/$match"
 spring:
   main:
     allow-circular-references: true

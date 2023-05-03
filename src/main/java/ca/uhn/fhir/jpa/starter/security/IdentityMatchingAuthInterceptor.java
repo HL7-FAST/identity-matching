@@ -21,6 +21,7 @@ import javax.naming.AuthenticationException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 
 @Interceptor
 public class IdentityMatchingAuthInterceptor {
@@ -28,12 +29,14 @@ public class IdentityMatchingAuthInterceptor {
 	private String introspectUrl;
 	private String clientId;
 	private String clientSecret;
+	private List<String> protectedEndpoints;
 
-	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String introspectUrl, String clientId, String clientSecret) {
+	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints) {
 		this.enableAuthentication = enableAuthentication;
 		this.introspectUrl = introspectUrl;
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
+		this.protectedEndpoints = protectedEndpoints;
 	}
 
 	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
@@ -42,7 +45,8 @@ public class IdentityMatchingAuthInterceptor {
 	public boolean incomingRequestPostProcessed(RequestDetails details, HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException {
 		boolean authenticated = false;
 		//check if request path is an endpoint that needs validation
-		if(request.getRequestURI().equals("/fhir/Patient/$match")) {
+		//if(request.getRequestURI().equals("/fhir/Patient/$match")) {
+		if(protectedEndpoints.size() > 0 && protectedEndpoints.contains(request.getRequestURI())) {
 			try {
 				String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
 				if (authHeader == null) {
