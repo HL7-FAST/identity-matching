@@ -4,8 +4,10 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -15,7 +17,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-
 import javax.naming.AuthenticationException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -51,33 +52,12 @@ public class IdentityMatchingAuthInterceptor {
 					throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
 				}
 
-				// Make an HTTP request to the introspection endpoint to validate the access token.
-				RestTemplate restTemplate = new RestTemplate();
-				HttpHeaders headers = new HttpHeaders();
-
-				var token = authHeader.split(" ")[1];
-				MultiValueMap<String, String> requestBody = new LinkedMultiValueMap<>();
-				requestBody.add("token", token);
-				requestBody.add("client_id", clientId);
-				requestBody.add("client_secret", clientSecret);
-
-				HttpEntity<MultiValueMap<String, String>> idpRequest = new HttpEntity<>(requestBody, headers);
-
-				String introspectionUrl = introspectUrl;
-				ResponseEntity<String> idpResponse = restTemplate.postForEntity(introspectionUrl, idpRequest, String.class);
-
-				if (idpResponse.getStatusCode() == HttpStatus.OK) {
-					ObjectMapper objectMapper = new ObjectMapper();
-					JsonNode introspectionResponse = objectMapper.readTree(idpResponse.getBody());
-					boolean isValid = introspectionResponse.get("active").asBoolean();
-					if (isValid) {
-						authenticated = true;
-					} else {
-						authenticated = false;
-					}
-				} else
-				{
+				if(!StringUtils.isBlank(clientSecret) && !StringUtils.isBlank(introspectUrl)) {
+					authenticated = introspectionCheck(authHeader);
+				}
+				else {
 					authenticated = false;
+					_logger.error("Failed to provide client secret and/or introspection url.");
 				}
 
 			} catch (AuthenticationException ex) {
@@ -94,5 +74,32 @@ public class IdentityMatchingAuthInterceptor {
 			response.getWriter().println("You are unauthorized to perform this request.");
 		}
 		return authenticated;
+	}
+
+	private boolean introspectionCheck(String authHeader) throws JsonProcessingException {
+
+		// Make an HTTP request to the introspection endpoint to validate the access token.
+		RestTemplate restTemplate = new RestTemplate();
+		HttpHeaders headers = new HttpHeaders();
+
+		var token = authHeader.split(" ")[1];
+		MultiValueMap<String, String> requestBody = new LinkedMultiValueMap<>();
+		requestBody.add("token", token);
+		requestBody.add("client_id", clientId);
+		requestBody.add("client_secret", clientSecret);
+
+
+		HttpEntity<MultiValueMap<String, String>> idpRequest = new HttpEntity<>(requestBody, headers);
+
+		ResponseEntity<String> idpResponse = restTemplate.postForEntity(introspectUrl, idpRequest, String.class);
+
+		if (idpResponse.getStatusCode() == HttpStatus.OK) {
+			ObjectMapper objectMapper = new ObjectMapper();
+			JsonNode introspectionResponse = objectMapper.readTree(idpResponse.getBody());
+			return introspectionResponse.get("active").asBoolean();
+		}
+		else {
+			return false;
+		}
 	}
 }
