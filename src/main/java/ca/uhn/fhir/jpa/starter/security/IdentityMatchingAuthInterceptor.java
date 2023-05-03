@@ -50,6 +50,8 @@ public class IdentityMatchingAuthInterceptor {
 
 		//check for public access header, if not detected then proceed with authentication checks
 		// if public access header is present, circumvent authentication and allow public access to all endpoints
+		//
+		//*** THIS IS JUST FOR RI TESTING, THIS SHOULD NOT BE INCLUDED IN A PRODUCTION SYSTEM ***
 		String publicAccessHeader = request.getHeader(allowPublicAccessHeader);
 		if(publicAccessHeader == null) {
 
