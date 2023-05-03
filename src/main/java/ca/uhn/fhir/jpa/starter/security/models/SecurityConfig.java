@@ -15,6 +15,7 @@ public class SecurityConfig {
 	String clientId;
 	String clientSecret;
 	List<String> protectedEndpoints = new ArrayList<>();
+	List<String> publicEndpoints = new ArrayList<>();
 
 	public boolean isEnableAuthentication() { return enableAuthentication; }
 	public void setEnableAuthentication(boolean enableAuthentication) { this.enableAuthentication = enableAuthentication; }
@@ -30,4 +31,7 @@ public class SecurityConfig {
 
 	public List<String> getProtectedEndpoints() { return protectedEndpoints; }
 	public void setProtectedEndpoints(List<String> protectedEndpoints) { this.protectedEndpoints = protectedEndpoints; }
+
+	public List<String> getPublicEndpoints() { return publicEndpoints; }
+	public void setPublicEndpoints(List<String> publicEndpoints) { this.publicEndpoints = publicEndpoints; }
 }

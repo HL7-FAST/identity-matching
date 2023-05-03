@@ -30,47 +30,63 @@ public class IdentityMatchingAuthInterceptor {
 	private String clientId;
 	private String clientSecret;
 	private List<String> protectedEndpoints;
+	private List<String> publicEndpoints;
 
-	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints) {
+	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
+	private final String allowPublicAccessHeader = "X-Allow-Public-Access";
+
+	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints, List<String> publicEndpoints) {
 		this.enableAuthentication = enableAuthentication;
 		this.introspectUrl = introspectUrl;
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
 		this.protectedEndpoints = protectedEndpoints;
+		this.publicEndpoints = publicEndpoints;
 	}
-
-	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
 
 	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
 	public boolean incomingRequestPostProcessed(RequestDetails details, HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException {
 		boolean authenticated = false;
-		//check if request path is an endpoint that needs validation
-		//if(request.getRequestURI().equals("/fhir/Patient/$match")) {
-		if(protectedEndpoints.size() > 0 && protectedEndpoints.contains(request.getRequestURI())) {
-			try {
-				String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
-				if (authHeader == null) {
-					throw new AuthenticationException("Not authorized (no authorization header found in request)");
-				}
-				if (!authHeader.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
-					throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
-				}
 
-				if(!StringUtils.isBlank(clientSecret) && !StringUtils.isBlank(introspectUrl)) {
-					authenticated = introspectionCheck(authHeader);
-				}
-				else {
-					authenticated = false;
-					_logger.error("Failed to provide client secret and/or introspection url.");
-				}
+		//check for public access header, if not detected then proceed with authentication checks
+		// if public access header is present, circumvent authentication and allow public access to all endpoints
+		String publicAccessHeader = request.getHeader(allowPublicAccessHeader);
+		if(publicAccessHeader == null) {
 
-			} catch (AuthenticationException ex) {
-				_logger.error(ex.getMessage(), ex);
-				_logger.info("Failed to authenticate request");
+			// check if request path is an endpoint that needs validation
+			// no values in proctedEndpoints means all endpoints require authentication
+			if ((protectedEndpoints.size() == 0 || protectedEndpoints.contains(request.getRequestURI())) && !publicEndpoints.contains(request.getRequestURI())) {
+				try {
+					String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
+					if (authHeader == null) {
+						throw new AuthenticationException("Not authorized (no authorization header found in request)");
+					}
+					if (!authHeader.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
+						throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
+					}
+
+					if (!StringUtils.isBlank(clientSecret) && !StringUtils.isBlank(introspectUrl)) {
+						authenticated = introspectionCheck(authHeader);
+					} else {
+						authenticated = false;
+						_logger.error("Failed to provide client secret and/or introspection url.");
+					}
+
+				} catch (AuthenticationException ex) {
+					_logger.error(ex.getMessage(), ex);
+					_logger.info("Failed to authenticate request");
+				}
+			} //otherwise, allow all
+			else {
+				authenticated = true;
 			}
-		} //otherwise, allow all
-		else {
+		}
+		else { //public access header detected or a public access point was requested - allow request
 			authenticated = true;
+
+			if(publicAccessHeader != null) {
+				_logger.info("The 'X-Allow-Public-Access' header was detected, ignoring security configuration.");
+			}
 		}
 
 		if(!authenticated) {

@@ -89,7 +89,8 @@ public class Application extends SpringBootServletInitializer {
 	  //register FAST security interceptors
 	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor();
 	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(securityConfig.isEnableAuthentication(),
-		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(), securityConfig.getProtectedEndpoints());
+		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(),
+		  securityConfig.getProtectedEndpoints(), securityConfig.getPublicEndpoints());
 	  restfulServer.registerInterceptor(securityDiscoveryInterceptor);
 	  restfulServer.registerInterceptor(authInterceptor);
 

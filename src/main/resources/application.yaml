@@ -11,7 +11,9 @@ security:
   client-id:
   client-secret:
   protected-endpoints:
-    - "/fhir/Patient/$match"
+  public-endpoints:
+    - "/fhir/metadata"
+    - "/fhir/.well-known/udap"
 spring:
   main:
     allow-circular-references: true
