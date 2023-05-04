@@ -12,8 +12,6 @@ security:
   client-secret:
   protected-endpoints:
   public-endpoints:
-    - "/fhir/metadata"
-    - "/fhir/.well-known/udap"
 spring:
   main:
     allow-circular-references: true

@@ -1,37 +1,44 @@
 package ca.uhn.fhir.jpa.starter.security.models;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-
 import java.util.ArrayList;
 import java.util.List;
 
-@ConfigurationProperties(prefix = "security")
 @Configuration
-@EnableConfigurationProperties
 public class SecurityConfig {
+	@Value("${enable-authentication}")
 	boolean enableAuthentication;
+	@Value("${introspection-url}")
 	String introspectionUrl;
+	@Value("${client-id}")
 	String clientId;
+	@Value("${client-secret}")
 	String clientSecret;
+	@Value("${protected-endpoints}")
 	List<String> protectedEndpoints = new ArrayList<>();
+	@Value("${public-endpoints}")
 	List<String> publicEndpoints = new ArrayList<>();
 
 	public boolean isEnableAuthentication() { return enableAuthentication; }
-	public void setEnableAuthentication(boolean enableAuthentication) { this.enableAuthentication = enableAuthentication; }
 
 	public String getIntrospectionUrl() { return introspectionUrl; }
-	public void setIntrospectionUrl(String introspectionUrl) { this.introspectionUrl = introspectionUrl;}
 
 	public String getClientId() { return clientId; }
-	public void setClientId(String clientId) { this.clientId = clientId; }
 
 	public String getClientSecret() { return clientSecret; }
-	public void setClientSecret(String clientSecret) { this.clientSecret = clientSecret; }
 
-	public List<String> getProtectedEndpoints() { return protectedEndpoints; }
-	public void setProtectedEndpoints(List<String> protectedEndpoints) { this.protectedEndpoints = protectedEndpoints; }
+	public List<String> getProtectedEndpoints() {
+		if(this.protectedEndpoints.size() > 0) {
+			return List.of(this.protectedEndpoints.get(0).split("[;]"));
+		}
+		return protectedEndpoints;
+	}
 
-	public List<String> getPublicEndpoints() { return publicEndpoints; }
-	public void setPublicEndpoints(List<String> publicEndpoints) { this.publicEndpoints = publicEndpoints; }
+	public List<String> getPublicEndpoints() {
+
+		if(this.publicEndpoints.size() > 0) {
+			return List.of(this.publicEndpoints.get(0).split("[;]"));
+		}
+		return publicEndpoints;
+	}
 }
