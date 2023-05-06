@@ -539,10 +539,10 @@ public class IdentityMatching {
 			return true;
 		}
 		else if(assertIDIPatientL0Profile) {
-			return scoredWeight >= 10;
+			return scoredWeight >= 9;
 		}
 		else if(assertIDIPatientL1Profile) {
-			return scoredWeight >= 20;
+			return scoredWeight >= 10;
 		}
 		else {
 			return false;

@@ -106,8 +106,8 @@ public class IdentityMatchingScorer {
 			getSSNMatch() ||
 			getInsuranceIdentifierMatch() ||
 			getMrnMatch()
-		) { weight += 4; }
-		if(getGivenNameMatch() && getFamilyNameMatch()) { weight += 4; }
+		) { weight += 5; }
+		if(getGivenNameMatch() && getFamilyNameMatch()) { weight += 3; }
 		if(getBirthDateMatch()) { weight += 2; }
 
 		return weight;
