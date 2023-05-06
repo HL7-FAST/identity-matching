@@ -7,6 +7,7 @@ import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
+import ca.uhn.fhir.model.valueset.BundleTypeEnum;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
@@ -16,6 +17,7 @@ import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.*;
 import org.apache.commons.lang3.StringUtils;
+import org.hl7.fhir.BundleType;
 import org.hl7.fhir.r4.model.*;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -249,6 +251,10 @@ public class IdentityMatching {
 			}
 
 		}
+
+		foundPatients.setType(Bundle.BundleType.SEARCHSET);
+		foundPatients.setTotal((int)foundPatients.getEntry().stream().count());
+
 
 		return foundPatients;
 
