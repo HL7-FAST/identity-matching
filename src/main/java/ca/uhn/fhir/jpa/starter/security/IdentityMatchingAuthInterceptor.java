@@ -4,9 +4,15 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.JWTVerifier;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.interfaces.DecodedJWT;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,11 +27,21 @@ import javax.naming.AuthenticationException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.List;
 
 @Interceptor
 public class IdentityMatchingAuthInterceptor {
 	private boolean enableAuthentication = false;
+
+	private String issuer;
+
+	private String publicKey;
 	private String introspectUrl;
 	private String clientId;
 	private String clientSecret;
@@ -35,8 +51,10 @@ public class IdentityMatchingAuthInterceptor {
 	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
 	private final String allowPublicAccessHeader = "X-Allow-Public-Access";
 
-	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints, List<String> publicEndpoints) {
+	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String issuer, String publicKey, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints, List<String> publicEndpoints) {
 		this.enableAuthentication = enableAuthentication;
+		this.issuer = issuer;
+		this.publicKey = publicKey;
 		this.introspectUrl = introspectUrl;
 		this.clientId = clientId;
 		this.clientSecret = clientSecret;
@@ -67,16 +85,18 @@ public class IdentityMatchingAuthInterceptor {
 						throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
 					}
 
+					//if a confidential client, use the client secret and introspect endpoint to validate token
 					if (!StringUtils.isBlank(clientSecret) && !StringUtils.isBlank(introspectUrl)) {
 						authenticated = introspectionCheck(authHeader);
-					} else {
-						authenticated = false;
-						_logger.error("Failed to provide client secret and/or introspection url.");
+					} else { //assume public client and validate using the token and supplied public key
+						authenticated = validateToken(authHeader);
 					}
 
 				} catch (AuthenticationException ex) {
 					_logger.error(ex.getMessage(), ex);
 					_logger.info("Failed to authenticate request");
+				} catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
+					throw new RuntimeException(ex);
 				}
 			} //otherwise, allow all
 			else {
@@ -85,10 +105,7 @@ public class IdentityMatchingAuthInterceptor {
 		}
 		else { //public access header detected or a public access point was requested - allow request
 			authenticated = true;
-
-			if(publicAccessHeader != null) {
-				_logger.info("The 'X-Allow-Public-Access' header was detected, ignoring security configuration.");
-			}
+			_logger.info("The 'X-Allow-Public-Access' header was detected, ignoring security configuration.");
 		}
 
 		if(!authenticated) {
@@ -122,6 +139,30 @@ public class IdentityMatchingAuthInterceptor {
 		}
 		else {
 			return false;
+		}
+	}
+
+	private boolean validateToken(String authHeader) throws NoSuchAlgorithmException, InvalidKeySpecException {
+
+		var token = authHeader.split(" ")[1];
+
+		//current set up for RSA 256, change as necessary
+		byte[] publicBytes = Base64.decodeBase64(publicKey);
+		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicBytes);
+		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		RSAPublicKey publicKey = (RSAPublicKey) keyFactory.generatePublic(keySpec);
+
+		try {
+			Algorithm algorithm = Algorithm.RSA256(publicKey, null);
+			JWTVerifier verifier = JWT.require(algorithm)
+				.withIssuer(issuer)
+				.build(); //Reusable verifier instance
+			DecodedJWT verifiedJwt = verifier.verify(token);
+
+			return verifiedJwt != null;
+
+		} catch (JWTVerificationException ex){
+			throw new JWTVerificationException(ex.getMessage());
 		}
 	}
 }

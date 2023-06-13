@@ -18,6 +18,7 @@ import ca.uhn.fhir.jpa.subscription.match.config.SubscriptionProcessorConfig;
 import ca.uhn.fhir.jpa.subscription.match.config.WebsocketDispatcherConfig;
 import ca.uhn.fhir.jpa.subscription.submit.config.SubscriptionSubmitterConfig;
 import ca.uhn.fhir.rest.server.RestfulServer;
+import ca.uhn.fhir.rest.server.interceptor.CorsInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.boot.SpringApplication;
@@ -31,7 +32,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Import;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
+import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.servlet.DispatcherServlet;
+
+import java.util.Arrays;
 
 @ServletComponentScan(basePackageClasses = {RestfulServer.class}) //, UnHapiServlet.class
 @SpringBootApplication(exclude = {ElasticsearchRestClientAutoConfiguration.class})
@@ -89,10 +93,41 @@ public class Application extends SpringBootServletInitializer {
 	  //register FAST security interceptors
 	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor();
 	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(securityConfig.isEnableAuthentication(),
+		  securityConfig.getIssuer(), securityConfig.getPublicKey(),
 		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(),
 		  securityConfig.getProtectedEndpoints(), securityConfig.getPublicEndpoints());
 	  restfulServer.registerInterceptor(securityDiscoveryInterceptor);
 	  restfulServer.registerInterceptor(authInterceptor);
+
+	  //check if there is existing CORS configuration, if so add 'x-allow-public-access' to the allowed headers, otherwise create a new CORS interceptor
+	  var existingCorsInterceptor = restfulServer.getInterceptorService().getAllRegisteredInterceptors().stream().filter(interceptor -> interceptor instanceof CorsInterceptor).findFirst().orElse(null);
+	  if (existingCorsInterceptor != null) {
+		  // Cast the interceptor to CorsInterceptor
+		  CorsInterceptor corsInterceptor = (CorsInterceptor) existingCorsInterceptor;
+
+		  // Add custom header to the existing CORS configuration
+		  corsInterceptor.getConfig().addAllowedHeader("x-allow-public-access");
+	  }
+	  else {
+		  // Define your CORS configuration
+		  CorsConfiguration config = new CorsConfiguration();
+		  config.addAllowedHeader("x-fhir-starter");
+		  config.addAllowedHeader("Origin");
+		  config.addAllowedHeader("Accept");
+		  config.addAllowedHeader("X-Requested-With");
+		  config.addAllowedHeader("Content-Type");
+		  config.addAllowedHeader("x-allow-public-access");
+
+		  config.addAllowedOrigin("*");
+
+		  config.addExposedHeader("Location");
+		  config.addExposedHeader("Content-Location");
+		  config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+
+		  // Create the interceptor and register it
+		  CorsInterceptor corsInterceptor = new CorsInterceptor(config);
+		  restfulServer.registerInterceptor(corsInterceptor);
+	  }
 
     ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean();
     beanFactory.autowireBean(restfulServer);

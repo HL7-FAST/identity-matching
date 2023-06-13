@@ -8,6 +8,10 @@ import java.util.List;
 public class SecurityConfig {
 	@Value("${enable-authentication}")
 	boolean enableAuthentication;
+	@Value("${issuer}")
+	String issuer;
+	@Value("${public-key}")
+	String publicKey;
 	@Value("${introspection-url}")
 	String introspectionUrl;
 	@Value("${client-id}")
@@ -20,6 +24,10 @@ public class SecurityConfig {
 	List<String> publicEndpoints = new ArrayList<>();
 
 	public boolean isEnableAuthentication() { return enableAuthentication; }
+
+	public String getIssuer() { return issuer; }
+
+	public String getPublicKey() { return publicKey; }
 
 	public String getIntrospectionUrl() { return introspectionUrl; }
 
