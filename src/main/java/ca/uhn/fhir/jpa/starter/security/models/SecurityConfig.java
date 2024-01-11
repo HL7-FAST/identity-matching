@@ -1,39 +1,37 @@
 package ca.uhn.fhir.jpa.starter.security.models;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
+@ConfigurationProperties(prefix = "security")
 public class SecurityConfig {
-	@Value("${enable-authentication}")
-	boolean enableAuthentication;
-	@Value("${issuer}")
+	@Getter @Setter
+	Boolean enableAuthentication;
+	@Getter @Setter
 	String issuer;
-	@Value("${public-key}")
+	@Getter @Setter
 	String publicKey;
-	@Value("${introspection-url}")
+	@Getter @Setter
 	String introspectionUrl;
-	@Value("${client-id}")
+	@Getter @Setter
 	String clientId;
-	@Value("${client-secret}")
+	@Getter @Setter
 	String clientSecret;
-	@Value("${protected-endpoints}")
+	@Setter
 	List<String> protectedEndpoints = new ArrayList<>();
-	@Value("${public-endpoints}")
+	@Setter
 	List<String> publicEndpoints = new ArrayList<>();
 
-	public boolean isEnableAuthentication() { return enableAuthentication; }
-
-	public String getIssuer() { return issuer; }
-
-	public String getPublicKey() { return publicKey; }
-
-	public String getIntrospectionUrl() { return introspectionUrl; }
-
-	public String getClientId() { return clientId; }
-
-	public String getClientSecret() { return clientSecret; }
+	@Getter @Setter
+	String certFile;
+	@Getter @Setter
+	String certPassword;
 
 	public List<String> getProtectedEndpoints() {
 		if(this.protectedEndpoints.size() > 0) {

@@ -6,11 +6,9 @@ import ca.uhn.fhir.jpa.batch2.JpaBatch2Config;
 import ca.uhn.fhir.jpa.starter.annotations.OnEitherVersion;
 import ca.uhn.fhir.jpa.starter.common.FhirTesterConfig;
 import ca.uhn.fhir.jpa.starter.identitymatching.DiscoveryInterceptor;
-import ca.uhn.fhir.jpa.starter.identitymatching.UnHapiServlet;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
 import ca.uhn.fhir.jpa.starter.operations.models.CustomHapiProperties;
-import ca.uhn.fhir.jpa.starter.resourceproviders.PatientMatchResourceProvider;
 import ca.uhn.fhir.jpa.starter.security.IdentityMatchingAuthInterceptor;
 import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
 import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
@@ -91,8 +89,8 @@ public class Application extends SpringBootServletInitializer {
 	  restfulServer.registerProviders(identityMatcher);
 
 	  //register FAST security interceptors
-	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor();
-	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(securityConfig.isEnableAuthentication(),
+	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor(customHapiProperties, securityConfig);
+	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(securityConfig.getEnableAuthentication(),
 		  securityConfig.getIssuer(), securityConfig.getPublicKey(),
 		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(),
 		  securityConfig.getProtectedEndpoints(), securityConfig.getPublicEndpoints());

@@ -4,6 +4,10 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+
+import com.auth0.jwk.Jwk;
+import com.auth0.jwk.JwkProvider;
+import com.auth0.jwk.UrlJwkProvider;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
@@ -26,10 +30,15 @@ import org.springframework.web.client.RestTemplate;
 import javax.naming.AuthenticationException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
-import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
@@ -42,6 +51,7 @@ public class IdentityMatchingAuthInterceptor {
 	private String issuer;
 
 	private String publicKey;
+	private RSAPublicKey rsaPublicKey;
 	private String introspectUrl;
 	private String clientId;
 	private String clientSecret;
@@ -147,13 +157,54 @@ public class IdentityMatchingAuthInterceptor {
 		var token = authHeader.split(" ")[1];
 
 		//current set up for RSA 256, change as necessary
-		byte[] publicBytes = Base64.decodeBase64(publicKey);
-		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicBytes);
-		KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-		RSAPublicKey publicKey = (RSAPublicKey) keyFactory.generatePublic(keySpec);
+		// System.out.println("publicKey: " + publicKey);
+		// byte[] publicBytes = Base64.decodeBase64(publicKey);
+		// X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicBytes);
+		// KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+		// RSAPublicKey publicKey = (RSAPublicKey) keyFactory.generatePublic(keySpec);
 
 		try {
-			Algorithm algorithm = Algorithm.RSA256(publicKey, null);
+			
+			DecodedJWT decodedJWT = JWT.decode(token);
+			if (!decodedJWT.getIssuer().equals(issuer)) {
+				throw new JWTVerificationException("Invalid issuer: Expected \"" + issuer + "\" but received \"" + decodedJWT.getIssuer() + "\"");
+			}
+
+			// check if we already have the public key
+			if (rsaPublicKey == null) {
+
+				// check if the public key was supplied in the configuration and attempt to use it
+				if (!StringUtils.isEmpty(publicKey)) {
+					byte[] publicBytes = Base64.decodeBase64(publicKey);
+					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicBytes);
+					KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+					rsaPublicKey = (RSAPublicKey) keyFactory.generatePublic(keySpec);
+				} 
+				
+				// otherwise, attempt to retrieve the public key from the jwks endpoint
+				else {
+					HttpClient client = HttpClient.newBuilder().build();
+					HttpRequest request = HttpRequest.newBuilder()
+						.uri(URI.create(StringUtils.removeEnd(issuer, "/") + "/.well-known/openid-configuration"))
+						.build();
+					HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+					String jwksUri = new ObjectMapper().readTree(response.body()).get("jwks_uri").asText();
+
+					JwkProvider provider = new UrlJwkProvider(new URL(jwksUri));
+					Jwk jwk = provider.get(decodedJWT.getKeyId());
+
+					rsaPublicKey = (RSAPublicKey) jwk.getPublicKey();
+				}
+
+				// if we still don't have the public key, throw an exception
+				if (rsaPublicKey == null) {
+					throw new JWTVerificationException("Could not determine public key");
+				}
+
+			}			
+
+
+			Algorithm algorithm = Algorithm.RSA256(rsaPublicKey, null);
 			JWTVerifier verifier = JWT.require(algorithm)
 				.withIssuer(issuer)
 				.build(); //Reusable verifier instance
@@ -163,6 +214,9 @@ public class IdentityMatchingAuthInterceptor {
 
 		} catch (JWTVerificationException ex){
 			throw new JWTVerificationException(ex.getMessage());
+		} catch (Exception ex) {
+			System.err.println("Exception: " + ex.getMessage());
+			throw new RuntimeException(ex);
 		}
 	}
 }

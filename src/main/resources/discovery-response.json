@@ -1,17 +1,17 @@
 {
-    "udap_versions_supported": ["test"],
-    "udap_profiles_supported": ["udap_dcr", "udap_authn"],
+    "udap_versions_supported": ["1"],
+    "udap_profiles_supported": ["udap_dcr", "udap_authn", "udap_authz"],
     "udap_authorization_extensions_supported": ["hl7-b2b"],
     "udap_authorization_extensions_required": ["hl7-b2b"],
     "udap_certifications_supported": ["https://www.example.com/udap/profiles/example-certification"],
     "udap_certifications_required": ["https://www.example.com/udap/profiles/example-certification"],
     "grant_types_supported": ["authorization_code", "refresh_token",  "client_credentials"],
-    "scopes_supported": ["openid", "launch/patient", "system/Patient.read", "system/AllergyIntolerance.read", "system/Procedures.read"],
-    "authorization_endpoint": "https://www.example-ip.com/authorization",    
-    "token_endpoint": "https://www.example-ip.com/token",
+    "scopes_supported": ["openid", "patient/*.read", "patient/*.rs", "user/*.read", "user/*.rs", "system/*.read", "system/*.rs"],
+    "authorization_endpoint": "",    
+    "token_endpoint": "",
     "token_endpoint_auth_methods_supported": ["private_key_jwt"],
     "token_endpoint_auth_signing_alg_values_supported": ["RS256", "ES384"],
-    "registration_endpoint": "https://www.my-fhir-server.com/fhir/register",
+    "registration_endpoint": "",
     "registration_endpoint_jwt_signing_alg_values_supported": ["RS256", "ES384"],
     "signed_metadata": "example-meta-data"
 }

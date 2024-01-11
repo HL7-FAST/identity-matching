@@ -10,8 +10,15 @@ security:
   introspection-url:
   client-id:
   client-secret:
+  issuer: https://localhost:5001
+  public-key:
   protected-endpoints:
   public-endpoints:
+    - /fhir/metadata
+    - /fhir/.well-known/udap
+  cert-file: client-cert.pfx
+  cert-password: udap-test
+
 spring:
   main:
     allow-circular-references: true
