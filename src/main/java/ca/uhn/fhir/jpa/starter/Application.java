@@ -8,7 +8,6 @@ import ca.uhn.fhir.jpa.starter.common.FhirTesterConfig;
 import ca.uhn.fhir.jpa.starter.identitymatching.DiscoveryInterceptor;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
-import ca.uhn.fhir.jpa.starter.operations.models.CustomHapiProperties;
 import ca.uhn.fhir.jpa.starter.security.IdentityMatchingAuthInterceptor;
 import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
 import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
@@ -56,7 +55,7 @@ public class Application extends SpringBootServletInitializer {
 	}
 
 	@Autowired
-	CustomHapiProperties customHapiProperties;
+	AppProperties appProperties;
 
 	@Autowired
 	SecurityConfig securityConfig;
@@ -85,11 +84,11 @@ public class Application extends SpringBootServletInitializer {
 	  //add custom operations
 	  IdentityMatching identityMatcher = new IdentityMatching();
 	  identityMatcher.setOrgDao(this.getDaoRegistry().getResourceDao("Patient"));
-	  identityMatcher.setServerAddress(this.customHapiProperties.getFhirBase());
+	  identityMatcher.setServerAddress(this.appProperties.getServer_address());
 	  restfulServer.registerProviders(identityMatcher);
 
 	  //register FAST security interceptors
-	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor(customHapiProperties, securityConfig);
+	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor(appProperties, securityConfig);
 	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(securityConfig.getEnableAuthentication(),
 		  securityConfig.getIssuer(), securityConfig.getPublicKey(),
 		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(),

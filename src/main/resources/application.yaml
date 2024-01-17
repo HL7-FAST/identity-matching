@@ -16,7 +16,7 @@ security:
   public-endpoints:
     - /fhir/metadata
     - /fhir/.well-known/udap
-  cert-file: client-cert.pfx
+  cert-file: classpath:client-cert.pfx
   cert-password: udap-test
 
 spring:
@@ -65,7 +65,6 @@ spring:
 #      hibernate.search.backend.type: elasticsearch
 #      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticAnalysisConfigurer
 hapi:
-  fhir-base: "http://localhost:8080/fhir/"
   fhir:
     ### This enables the swagger-ui at /fhir/swagger-ui/index.html as well as the /fhir/api-docs (see https://hapifhir.io/hapi-fhir/docs/server_plain/openapi.html)
     openapi_enabled: true
@@ -78,10 +77,15 @@ hapi:
     ### alternatively, it may be set using the X-Forwarded-Proto header.
     #   use_apache_address_strategy_https: false
     ### enable to set the Server URL
-    #    server_address: http://hapi.fhir.org/baseR4
+    server_address: http://localhost:8080/fhir
+    # server_address: https://identity-matching.fast.hl7.org/fhir
     #    defer_indexing_for_codesystems_of_size: 101
-    #    install_transitive_ig_dependencies: true
-    #    implementationguides:
+    # install_transitive_ig_dependencies: false
+    # implementationguides:
+    #   identity_matching:
+    #     url: http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/package.tgz
+    #     name: hl7.fhir.us.identity-matching
+    #     version: 2.0.0-draft
     ###    example from registry (packages.fhir.org)
     #      swiss:
     #        name: swiss.mednet.fhir
@@ -172,7 +176,7 @@ hapi:
         fhir_version: R4
       global:
         name: Global Tester
-        server_address: "http://hapi.fhir.org/baseR4"
+        server_address: "https://identity-matching.fast.hl7.org/fhir"
         refuse_to_fetch_third_party_urls: false
         fhir_version: R4
     #    validation:

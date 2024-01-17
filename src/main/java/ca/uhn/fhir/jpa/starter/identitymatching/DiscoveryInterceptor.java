@@ -2,7 +2,7 @@ package ca.uhn.fhir.jpa.starter.identitymatching;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
-import ca.uhn.fhir.jpa.starter.operations.models.CustomHapiProperties;
+import ca.uhn.fhir.jpa.starter.AppProperties;
 import ca.uhn.fhir.jpa.starter.operations.models.DiscoveryObject;
 import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
 
@@ -18,7 +18,6 @@ import org.springframework.util.ResourceUtils;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.KeyStore;
@@ -41,10 +40,10 @@ public class DiscoveryInterceptor
 	private final Logger _logger = LoggerFactory.getLogger(DiscoveryInterceptor.class);
 
 	private SecurityConfig securityConfig;
-	private CustomHapiProperties customHapiProperties;
+	private AppProperties appProperties;
 
-	public DiscoveryInterceptor(CustomHapiProperties customHapiProperties, SecurityConfig securityConfig) {
-		this.customHapiProperties = customHapiProperties;
+	public DiscoveryInterceptor(AppProperties appProperties, SecurityConfig securityConfig) {
+		this.appProperties = appProperties;
 		this.securityConfig = securityConfig;
 	}
 
@@ -72,7 +71,7 @@ public class DiscoveryInterceptor
 			myJsonObject.setRegistration_endpoint_jwt_signing_alg_values_supported(new String[] { "RS256" });
 
 
-			String fhirBase = StringUtils.removeEnd(customHapiProperties.getFhirBase(), "/");
+			String fhirBase = StringUtils.removeEnd(appProperties.getServer_address(), "/");
 			String issuer = StringUtils.removeEnd(securityConfig.getIssuer(), "/");
 
 			myJsonObject.setAuthorization_endpoint(issuer + "/connect/authorize");
