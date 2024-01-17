@@ -69,14 +69,14 @@ public class DiscoveryInterceptor
 
 			String signedMetadata = "";
 
-			FileInputStream stream = new FileInputStream(ResourceUtils.getFile("classpath:" + securityConfig.getCertFile()));
+			FileInputStream stream = new FileInputStream(ResourceUtils.getFile(securityConfig.getCertFile()));
 			KeyStore ks = KeyStore.getInstance("pkcs12");
 			ks.load(stream, securityConfig.getCertPassword().toCharArray());
 			String alias = ks.aliases().nextElement();
 
 			X509Certificate certificate = (X509Certificate) ks.getCertificate(alias);
 			RSAPublicKey publicKey = (RSAPublicKey) certificate.getPublicKey();
-			RSAPrivateKey privateKey = (RSAPrivateKey) ks.getKey(alias, "udap-test".toCharArray());
+			RSAPrivateKey privateKey = (RSAPrivateKey) ks.getKey(alias, securityConfig.getCertPassword().toCharArray());
 
 			Algorithm algorithm = Algorithm.RSA256(publicKey, privateKey);
 			signedMetadata = JWT.create()
@@ -87,7 +87,7 @@ public class DiscoveryInterceptor
 				.withIssuer(fhirBase)
 				.withSubject(fhirBase)
 				.withIssuedAt(Date.from(Instant.now()))
-				.withExpiresAt(Date.from(Instant.now()))
+				.withExpiresAt(Date.from(Instant.now().plusMillis(86400000)))
 				.withJWTId(UUID.randomUUID().toString())
 				.withClaim("authorization_endpoint", myJsonObject.getAuthorization_endpoint())
 				.withClaim("token_endpoint", myJsonObject.getToken_endpoint())
