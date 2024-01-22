@@ -5,6 +5,7 @@ import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.batch2.JpaBatch2Config;
 import ca.uhn.fhir.jpa.starter.annotations.OnEitherVersion;
 import ca.uhn.fhir.jpa.starter.common.FhirTesterConfig;
+import ca.uhn.fhir.jpa.starter.identitymatching.CertInterceptor;
 import ca.uhn.fhir.jpa.starter.identitymatching.DiscoveryInterceptor;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
@@ -89,12 +90,17 @@ public class Application extends SpringBootServletInitializer {
 
 	  //register FAST security interceptors
 	  DiscoveryInterceptor securityDiscoveryInterceptor = new DiscoveryInterceptor(appProperties, securityConfig);
+		restfulServer.registerInterceptor(securityDiscoveryInterceptor);
+
 	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(securityConfig.getEnableAuthentication(),
 		  securityConfig.getIssuer(), securityConfig.getPublicKey(),
 		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(),
 		  securityConfig.getProtectedEndpoints(), securityConfig.getPublicEndpoints());
-	  restfulServer.registerInterceptor(securityDiscoveryInterceptor);
-	  restfulServer.registerInterceptor(authInterceptor);
+		restfulServer.registerInterceptor(authInterceptor);
+
+		CertInterceptor certInterceptor = new CertInterceptor(appProperties, securityConfig);
+		restfulServer.registerInterceptor(certInterceptor);	  
+	  
 
 	  //check if there is existing CORS configuration, if so add 'x-allow-public-access' to the allowed headers, otherwise create a new CORS interceptor
 	  var existingCorsInterceptor = restfulServer.getInterceptorService().getAllRegisteredInterceptors().stream().filter(interceptor -> interceptor instanceof CorsInterceptor).findFirst().orElse(null);
