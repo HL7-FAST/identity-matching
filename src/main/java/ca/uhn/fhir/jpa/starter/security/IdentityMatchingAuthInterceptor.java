@@ -170,10 +170,12 @@ public class IdentityMatchingAuthInterceptor {
 				throw new JWTVerificationException("Invalid issuer: Expected \"" + issuer + "\" but received \"" + decodedJWT.getIssuer() + "\"");
 			}
 
+			// TODO: implement caching
 			// check if we already have the public key
-			if (rsaPublicKey == null) {
+			// if (rsaPublicKey == null) {
 
 				// check if the public key was supplied in the configuration and attempt to use it
+				// _logger.info("!StringUtils.isEmpty(publicKey): " + !StringUtils.isEmpty(publicKey));
 				if (!StringUtils.isEmpty(publicKey)) {
 					byte[] publicBytes = Base64.decodeBase64(publicKey);
 					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(publicBytes);
@@ -191,6 +193,7 @@ public class IdentityMatchingAuthInterceptor {
 					String jwksUri = new ObjectMapper().readTree(response.body()).get("jwks_uri").asText();
 
 					JwkProvider provider = new UrlJwkProvider(new URL(jwksUri));
+					// _logger.info("decodedJWT.getKeyId(): " + decodedJWT.getKeyId());
 					Jwk jwk = provider.get(decodedJWT.getKeyId());
 
 					rsaPublicKey = (RSAPublicKey) jwk.getPublicKey();
@@ -201,7 +204,7 @@ public class IdentityMatchingAuthInterceptor {
 					throw new JWTVerificationException("Could not determine public key");
 				}
 
-			}			
+			// }			
 
 
 			Algorithm algorithm = Algorithm.RSA256(rsaPublicKey, null);
