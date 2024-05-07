@@ -17,6 +17,8 @@ import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.*;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
+import org.joda.time.LocalDate;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -158,13 +160,15 @@ public class IdentityMatching {
 						HumanName patientRef = patient.getName().get(0);
 
 						//check family name
-						if(patientRef.getFamily().equals(name.getFamily())) {
+						if(patientRef.getFamily() != null &&  patientRef.getFamily().equals(name.getFamily())) {
 							scorer.setFamilyNameMatch(true);
 						}
 
 						//check given names
 						for(StringType givenName : name.getGiven()) {
+							if (givenName.toString() == null) continue;
 							for(StringType refName : patientRef.getGiven()) {
+								if (refName.toString() == null) continue;
 								if(refName.toString().equals(givenName.toString())) {
 									scorer.setGivenNameMatch(true);
 								}
@@ -593,7 +597,7 @@ public class IdentityMatching {
 		//check for birthdate if present
 		if(refPatient.hasBirthDate())
 		{
-			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(refPatient.getBirthDateElement().getValueAsString()));
+			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(LocalDate.fromDateFields(refPatient.getBirthDateElement().getValue()).toString()));
 		}
 
 		//check gender if present
