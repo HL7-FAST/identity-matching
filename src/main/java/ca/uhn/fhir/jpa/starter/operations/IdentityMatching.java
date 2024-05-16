@@ -211,16 +211,16 @@ public class IdentityMatching {
 				//score telecom
 				if(patient.hasTelecom() && patientEntry.hasTelecom()) {
 					for (ContactPoint com : patientEntry.getTelecom()) {
-						if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+						if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
 							for (ContactPoint refCom : patient.getTelecom()) {
-								if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+								if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
 									if(com.getValue().equals(refCom.getValue())) { scorer.setPhoneNumberMatch(true); }
 								}
 							}
 						}
-						else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+						else if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
 							for (ContactPoint refCom : patient.getTelecom()) {
-								if (refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+								if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
 									if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
 								}
 							}
