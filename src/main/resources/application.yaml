@@ -10,14 +10,16 @@ security:
   introspection-url:
   client-id:
   client-secret:
-  issuer: https://localhost:5001
+  # issuer: https://localhost:5001
+  issuer: https://udap-security.fast.hl7.org
   public-key:
   protected-endpoints:
   public-endpoints:
     - /fhir/metadata
     - /fhir/.well-known/udap
-  cert-file: classpath:client-cert.pfx
-  cert-password: udap-test
+  # cert-file: classpath:client-cert.pfx
+  # cert-password: udap-test
+  fetch-cert: true
 
 spring:
   main:

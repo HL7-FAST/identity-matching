@@ -21,7 +21,7 @@
     <packaging>war</packaging>
 
     <properties>
-        <java.version>11</java.version>
+        <java.version>17</java.version>
     </properties>
 
     <prerequisites>
@@ -327,11 +327,11 @@
             <version>${spring_boot_version}</version>
         </dependency>
 
-        <!-- <dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
             <version>${spring_boot_version}</version>
-        </dependency> -->
+        </dependency>
 
         <!-- https://mvnrepository.com/artifact/io.micrometer/micrometer-core -->
         <dependency>

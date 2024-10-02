@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.identitymatching;
+package ca.uhn.fhir.jpa.starter.security;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;

@@ -186,10 +186,18 @@ public class IdentityMatchingAuthInterceptor {
 				// otherwise, attempt to retrieve the public key from the jwks endpoint
 				else {
 					HttpClient client = HttpClient.newBuilder().build();
-					HttpRequest request = HttpRequest.newBuilder()
-						.uri(URI.create(StringUtils.removeEnd(issuer, "/") + "/.well-known/openid-configuration"))
-						.build();
-					HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+					HttpResponse<String> response;
+					try {
+						HttpRequest request = HttpRequest.newBuilder()
+							.uri(URI.create(StringUtils.removeEnd(issuer, "/") + "/.well-known/openid-configuration"))
+							.build();	
+						response = client.send(request, HttpResponse.BodyHandlers.ofString());
+					} catch (Exception e) {
+						// TODO: handle exception
+						System.err.println("HTTP Exception: " + e.getMessage());
+						throw new RuntimeException(e);
+					}
 					String jwksUri = new ObjectMapper().readTree(response.body()).get("jwks_uri").asText();
 
 					JwkProvider provider = new UrlJwkProvider(new URL(jwksUri));

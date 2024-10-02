@@ -33,6 +33,12 @@ public class SecurityConfig {
 	@Getter @Setter
 	String certPassword;
 
+	@Getter @Setter
+	String defaultCertPassword = "udap-test";
+
+	@Getter @Setter
+	boolean fetchCert = true;
+
 	public List<String> getProtectedEndpoints() {
 		if(this.protectedEndpoints.size() > 0) {
 			return List.of(this.protectedEndpoints.get(0).split("[;]"));

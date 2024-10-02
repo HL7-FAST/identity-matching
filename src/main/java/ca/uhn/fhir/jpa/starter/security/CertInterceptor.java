@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.identitymatching;
+package ca.uhn.fhir.jpa.starter.security;
 
 import java.io.IOException;
 import java.security.KeyStoreException;

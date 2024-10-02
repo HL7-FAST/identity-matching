@@ -168,3 +168,7 @@ Temporary Items
 
 # Helm Chart dependencies
 **/charts/*.tgz
+
+
+# generated cert
+generated-cert.pfx
