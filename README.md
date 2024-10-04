@@ -6,6 +6,9 @@ Note that this project is specifically intended for end users of the HAPI FHIR J
 
 Need Help? Please see: https://github.com/hapifhir/hapi-fhir/wiki/Getting-Help
 
+## Foundry
+A live demo is hosted by [HL7 FHIR Foundry](https://foundry.hl7.org/products/7dee5dfd-d098-433c-9377-c15faa5c878b), where you may also download curated configurations to run yourself.
+
 ## Prerequisites
 
 In order to use this sample, you should have:
