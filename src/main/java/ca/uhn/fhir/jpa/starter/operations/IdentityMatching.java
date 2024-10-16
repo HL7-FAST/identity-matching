@@ -2,11 +2,13 @@ package ca.uhn.fhir.jpa.starter.operations;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
+import ca.uhn.fhir.jpa.starter.AppProperties;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
+import ca.uhn.fhir.parser.DataFormatException;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
@@ -18,10 +20,15 @@ import ca.uhn.fhir.rest.param.*;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 import org.joda.time.LocalDate;
-
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.core.io.support.ResourcePatternUtils;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 
 public class IdentityMatching {
@@ -34,29 +41,22 @@ public class IdentityMatching {
 	private boolean assertIDIPatientL1Profile = false;
 	private String serverAddress;
 	private IFhirResourceDao<Patient> patientDao;
+	private ResourceLoader resourceLoader;
 
-	public void setOrgDao(IFhirResourceDao<Patient> patientDao) {
+
+	public IdentityMatching(AppProperties appProperties, IFhirResourceDao<Patient> patientDao, ResourceLoader resourceLoader) {
+		this.serverAddress = appProperties.getServer_address();
 		this.patientDao = patientDao;
+		this.resourceLoader = resourceLoader;
 	}
 
-	public void setServerAddress(String serverAddress) {
-		this.serverAddress = serverAddress;
-	}
-
-	/**
-	 * Returns welcome message for a customer by customer name and location
-	 *
-	 * @param params - Use this to provide an entire set of patient details for the MPI to match against (e.g. POST a patient record to Patient/$match).
-	 * If there are multiple potential matches, then the match should not return the results with this flag set to true. When false, the server may return multiple results with each result graded accordingly.
-	 * The maximum number of records to return. If no value is provided, the server decides how many matches to return. Note that clients should be careful when using this, as it may prevent probable - and valid - matches from being returned
-	 * @return -
-	 * A bundle contain a set of Patient records that represent possible matches, optionally it may also contain an OperationOutcome with further information about the search results (such as warnings or information messages, such as a count of records that were close but eliminated) If the operation was unsuccessful, then an OperationOutcome may be returned along with a BadRequest status Code (e.g. security issue, or insufficient properties in patient fragment - check against profile)
-	 * Note: as this is the only out parameter, it is a resource, and it has the name 'return', the result of this operation is returned directly as a resource
-	 */
-	@Operation(name="$match", typeName="Patient", idempotent=false)
-	public Bundle patientMatchOperation(
-		@ResourceParam Parameters params
-	)
+	
+	@Operation(name = "$idi-match", typeName = "Patient", manualResponse = true)
+	public void patientMatchOperation(
+		@ResourceParam Parameters params,
+		HttpServletRequest theServletRequest,
+		HttpServletResponse theServletResponse
+	) throws DataFormatException, IOException
 	{
 
 		assertIDIPatientProfile = false;
@@ -69,19 +69,19 @@ public class IdentityMatching {
 		Patient patient = null;
 		boolean onlyCertainMatches = false;
 		IntegerType count;
-		Bundle foundPatients = new Bundle();
+		Bundle outputBundle = new Bundle();
 
-		for(var param : params.getParameter()){
+		for(var param : params.getParameter()) {
 			//if a patient resource, set as patient to search against
-			if(param.getName().equals("resource") && param.getResource().getClass().equals(Patient.class))
+			if(param.getName().equals("patient") && param.getResource().getClass().equals(Patient.class))
 			{
-				patient =(Patient)param.getResource();
+				patient = (Patient)param.getResource();
 			}
 
 			//check for onlyCertainMatches
 			if(param.getName().equals("onlyCertainMatches"))
 			{
-				onlyCertainMatches = param.getValue().equals("true") ? true : false;
+				onlyCertainMatches = ((BooleanType) param.getValue()).booleanValue();
 			}
 
 			//check for count
@@ -92,174 +92,200 @@ public class IdentityMatching {
 
 		}
 
-		if(patient != null)
+
+		// Patient resource must be provided and the parameter must be named "patient"
+		if (patient == null) {
+			OperationOutcome outcome = new OperationOutcome();
+			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
+				.setDiagnostics("A parameter named 'patient' must be provided with a valid Patient resource.");
+			
+			writeResponse(theServletRequest, theServletResponse, outcome, HttpServletResponse.SC_BAD_REQUEST);
+			return;
+		}
+
+
+		//check profile assertions
+		List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
+		for(CanonicalType profile : metaProfiles) {
+			switch(profile.getValue()) {
+				case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
+				case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
+				case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
+			}
+		}
+
+		//build out identifier search params and base identifier params by traversing the identifiers
+		List<IdentifierQueryParams> identifierParams = new ArrayList<>();
+		List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
+		patient.getIdentifier().stream().forEach(x -> {
+
+			List<Coding> codings = x.getType().getCoding();
+
+			if(codings.size() > 0) {
+				identifierParams.add(new IdentifierQueryParams(
+					x.getSystem(),
+					x.getValue(),
+					codings.stream().findFirst().get().getCode()
+				));
+
+				baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));
+
+			}
+		});
+
+		//Dynamically build out patient match query based on provided patient resource
+		outputBundle = getPatientMatch(patient);
+		//foundPatients = matchPatients(patient, client, baseIdentifierParams);
+
+		//Loop through results and grade matches
+		for (Bundle.BundleEntryComponent pf : outputBundle.getEntry())
 		{
-			//check profile assertions
-			List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
-			for(CanonicalType profile : metaProfiles) {
-				switch(profile.getValue()) {
-					case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
-					case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
-					case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
+			IdentityMatchingScorer scorer = new IdentityMatchingScorer();
+			List<String> scorerNotes = new ArrayList<>();
+			Patient patientEntry = (Patient)pf.getResource();
+
+			//score identifiers
+			if(patient.hasIdentifier() && patientEntry.hasIdentifier())
+			{
+				List<Identifier> identifiers = patientEntry.getIdentifier();
+				for(IdentifierQueryParams id : identifierParams) {
+					identifiers.stream().forEach(x -> {
+						if(x.getSystem().equals(id.getIdentifierSystem()) && x.getValue().equals(id.getIdentifierValue())) {
+							//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
+							//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
+							switch (id.getIdentifierCode()) {
+								case("MR"): { scorer.setMrnMatch(true);  } break;
+								case("DL"): { scorer.setDriversLicenseMatch(true); } break;
+								case("PPN"): { scorer.setPassportMatch(true); } break;
+								case("SB"): { scorer.setSSNMatch(true); } break;
+							}
+						}
+					});
 				}
 			}
 
-			//build out identifier search params and base identifier params by traversing the identifiers
-			List<IdentifierQueryParams> identifierParams = new ArrayList<>();
-			List<BaseIdentifierDt> baseIdentifierParams = new ArrayList<>();
-			patient.getIdentifier().stream().forEach(x -> {
+			//score names
+			if(patient.hasName() && patientEntry.hasName()) {
+				for(HumanName name : patientEntry.getName()) {
+					HumanName patientRef = patient.getName().get(0);
 
-				List<Coding> codings = x.getType().getCoding();
-
-				if(codings.size() > 0) {
-					identifierParams.add(new IdentifierQueryParams(
-						x.getSystem(),
-						x.getValue(),
-						codings.stream().findFirst().get().getCode()
-					));
-
-					baseIdentifierParams.add(new IdentifierDt(x.getSystem(), x.getValue()));
-
-				}
-			});
-
-			//Dynamically build out patient match query based on provided patient resource
-			foundPatients = getPatientMatch(patient);
-			//foundPatients = matchPatients(patient, client, baseIdentifierParams);
-
-			//Loop through results and grade matches
-			for (Bundle.BundleEntryComponent pf : foundPatients.getEntry())
-			{
-				IdentityMatchingScorer scorer = new IdentityMatchingScorer();
-				List<String> scorerNotes = new ArrayList<>();
-				Patient patientEntry = (Patient)pf.getResource();
-
-				//score identifiers
-				if(patient.hasIdentifier() && patientEntry.hasIdentifier())
-				{
-					List<Identifier> identifiers = patientEntry.getIdentifier();
-					for(IdentifierQueryParams id : identifierParams) {
-						identifiers.stream().forEach(x -> {
-							if(x.getSystem().equals(id.getIdentifierSystem()) && x.getValue().equals(id.getIdentifierValue())) {
-								//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
-								//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
-								switch (id.getIdentifierCode()) {
-									case("MR"): { scorer.setMrnMatch(true);  } break;
-									case("DL"): { scorer.setDriversLicenseMatch(true); } break;
-									case("PPN"): { scorer.setPassportMatch(true); } break;
-									case("SB"): { scorer.setSSNMatch(true); } break;
-								}
-							}
-						});
+					//check family name
+					if(patientRef.getFamily() != null &&  patientRef.getFamily().equals(name.getFamily())) {
+						scorer.setFamilyNameMatch(true);
 					}
-				}
 
-				//score names
-				if(patient.hasName() && patientEntry.hasName()) {
-					for(HumanName name : patientEntry.getName()) {
-						HumanName patientRef = patient.getName().get(0);
-
-						//check family name
-						if(patientRef.getFamily() != null &&  patientRef.getFamily().equals(name.getFamily())) {
-							scorer.setFamilyNameMatch(true);
-						}
-
-						//check given names
-						for(StringType givenName : name.getGiven()) {
-							if (givenName.toString() == null) continue;
-							for(StringType refName : patientRef.getGiven()) {
-								if (refName.toString() == null) continue;
-								if(refName.toString().equals(givenName.toString())) {
-									scorer.setGivenNameMatch(true);
-								}
+					//check given names
+					for(StringType givenName : name.getGiven()) {
+						if (givenName.toString() == null) continue;
+						for(StringType refName : patientRef.getGiven()) {
+							if (refName.toString() == null) continue;
+							if(refName.toString().equals(givenName.toString())) {
+								scorer.setGivenNameMatch(true);
 							}
+						}
 
 //						if(patientRef.getGiven().contains(givenName)) {
 //							scorer.setGivenNameMatch(true);
 //						}
-						}
-
-						//TODO: Add middle name/initial
-
 					}
+
+					//TODO: Add middle name/initial
+
 				}
-
-				//score gender
-				if(patient.hasGender() && patientEntry.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
-					scorer.setGenderMatch(true);
-				}
-
-				//score birthdate
-				if(patient.hasBirthDate() && patientEntry.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
-					scorer.setBirthDateMatch(true);
-				}
-
-				//score addresses
-				if(patient.hasAddress() && patientEntry.hasAddress()) {
-					for(Address epAddress : patientEntry.getAddress()) {
-						for(Address rpAddress : patient.getAddress()) {
-							if(rpAddress.getLine().stream().anyMatch(new HashSet<>(epAddress.getLine())::contains)) {
-								scorer.setAddressLineMatch(true);
-							}
-							if(rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
-							if(rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
-							if(rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
-						}
-					}
-				}
-
-				//score telecom
-				if(patient.hasTelecom() && patientEntry.hasTelecom()) {
-					for (ContactPoint com : patientEntry.getTelecom()) {
-						if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-							for (ContactPoint refCom : patient.getTelecom()) {
-								if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-									if(com.getValue().equals(refCom.getValue())) { scorer.setPhoneNumberMatch(true); }
-								}
-							}
-						}
-						else if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-							for (ContactPoint refCom : patient.getTelecom()) {
-								if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-									if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
-								}
-							}
-						}
-					}
-				}
-
-				//create bundle search component element
-				Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
-				searchComp.setMode(Bundle.SearchEntryMode.MATCH);
-				searchComp.setScore(scorer.scoreMatch());
-
-				//Add extension to place match messages
-				Extension extExplanation = new Extension();
-				extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html");
-				extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
-				searchComp.addExtension(extExplanation);
-
-				//set profile and weight extensions for testing
-				if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
-					Extension extAssertion = new Extension();
-					extAssertion.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/artifacts.html#structures-resource-profiles");
-					IdentityMatchingScorer assertionScore = gradePatientReference(patient);
-					extAssertion.setValue(new StringType("Supplied patient reference" + (passesProfileAssertion(assertionScore) ? " passed " : " failed ") + "profile assertion with a score of " + assertionScore.getMatchWeight() + "."));
-					searchComp.addExtension(extAssertion);
-				}
-
-				pf.setSearch(searchComp);
-
 			}
+
+			//score gender
+			if(patient.hasGender() && patientEntry.hasGender() && patientEntry.getGender().toCode().equals(patient.getGender().toCode())) {
+				scorer.setGenderMatch(true);
+			}
+
+			//score birthdate
+			if(patient.hasBirthDate() && patientEntry.hasBirthDate() && patientEntry.getBirthDate().equals(patient.getBirthDate())) {
+				scorer.setBirthDateMatch(true);
+			}
+
+			//score addresses
+			if(patient.hasAddress() && patientEntry.hasAddress()) {
+				for(Address epAddress : patientEntry.getAddress()) {
+					for(Address rpAddress : patient.getAddress()) {
+						if(rpAddress.getLine().stream().anyMatch(new HashSet<>(epAddress.getLine())::contains)) {
+							scorer.setAddressLineMatch(true);
+						}
+						if(rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
+						if(rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
+						if(rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
+					}
+				}
+			}
+
+			//score telecom
+			if(patient.hasTelecom() && patientEntry.hasTelecom()) {
+				for (ContactPoint com : patientEntry.getTelecom()) {
+					if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+						for (ContactPoint refCom : patient.getTelecom()) {
+							if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+								if(com.getValue().equals(refCom.getValue())) { scorer.setPhoneNumberMatch(true); }
+							}
+						}
+					}
+					else if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+						for (ContactPoint refCom : patient.getTelecom()) {
+							if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+								if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
+							}
+						}
+					}
+				}
+			}
+
+			//create bundle search component element
+			// Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
+			// searchComp.setMode(Bundle.SearchEntryMode.MATCH);
+			// searchComp.setScore(scorer.scoreMatch());
+
+			//Add extension to place match messages
+			// Extension extExplanation = new Extension();
+			// extExplanation.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html");
+			// extExplanation.setValue(new StringType(StringUtils.join(scorer.getMatchMessages(), "|")));
+			// searchComp.addExtension(extExplanation);
+
+			//set profile and weight extensions for testing
+			// if(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile) {
+			// 	Extension extAssertion = new Extension();
+			// 	extAssertion.setUrl("http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/artifacts.html#structures-resource-profiles");
+			// 	IdentityMatchingScorer assertionScore = gradePatientReference(patient);
+			// 	extAssertion.setValue(new StringType("Supplied patient reference" + (passesProfileAssertion(assertionScore) ? " passed " : " failed ") + "profile assertion with a score of " + assertionScore.getMatchWeight() + "."));
+			// 	searchComp.addExtension(extAssertion);
+			// }
+
+			// pf.setSearch(searchComp);
 
 		}
 
-		foundPatients.setType(Bundle.BundleType.SEARCHSET);
-		foundPatients.setTotal((int)foundPatients.getEntry().stream().count());
+		outputBundle.setType(Bundle.BundleType.COLLECTION);
+		outputBundle.setMeta(new Meta().addProfile("http://hl7.org/fhir/us/identity-matching/StructureDefinition/idi-match-bundle"));
 
+		// add example Organization to the output bundle as the first entry
+		var resource = ResourcePatternUtils.getResourcePatternResolver(resourceLoader).getResource("classpath:Organization-OrgExample.json");
+		String resourceText = new String(resource.getInputStream().readAllBytes());
+		Organization exampleOrg = ctx.newJsonParser().parseResource(Organization.class, resourceText);
 
-		return foundPatients;
+		if (exampleOrg != null) {
+			outputBundle.getEntry().add(0, createBundleEntry(exampleOrg));
+		}		
+		else {
+			OperationOutcome outcome = new OperationOutcome();
+			outcome.addIssue().setCode(OperationOutcome.IssueType.EXCEPTION).setSeverity(OperationOutcome.IssueSeverity.ERROR)
+				.setDiagnostics("Organization-OrgExample.json file not found.");
 
+			writeResponse(theServletRequest, theServletResponse, outcome, HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+		}
+
+		// add organization to identifier property
+		Reference orgRef = new Reference("http://example.org/Organization/" + exampleOrg.getIdPart());
+		outputBundle.setIdentifier(new Identifier().setAssigner(orgRef));
+
+		writeResponse(theServletRequest, theServletResponse, outputBundle, HttpServletResponse.SC_OK);
 
 	}
 
@@ -677,18 +703,26 @@ public class IdentityMatching {
 
 	}
 
-	private Bundle.BundleEntryComponent createBundleEntry(Patient patient) {
+	private Bundle.BundleEntryComponent createBundleEntry(DomainResource resource) {
 		Bundle.BundleEntryComponent entry = new Bundle.BundleEntryComponent();
-		entry.setResource(patient);
+		entry.setResource(resource);
 		if (this.serverAddress != null && !this.serverAddress.isEmpty()) {
 			try {
-				// Setting the fullUrl only works if there is a server address, which is only set when deploying with an application.yml file; it is not present when debugging in IntelliJ/Eclipse.
 				String fullUrl = this.serverAddress;
-				fullUrl += (!fullUrl.endsWith("/") ? "/" : "") + patient.getId();
+				fullUrl += (!fullUrl.endsWith("/") ? "/" : "") + resource.fhirType() + "/" + resource.getIdPart();
 				entry.setFullUrl(fullUrl);
 			} catch (Exception ex) { }
 		}
 		return entry;
+	}
+
+
+	private void writeResponse(HttpServletRequest theServletRequest, HttpServletResponse theServletResponse, Resource resource, int reponseStatus) throws IOException {
+		theServletResponse.setStatus(reponseStatus);
+		theServletResponse.setContentType("application/fhir+json");
+
+		FhirContext ctx = FhirContextProvider.getFhirContext();
+		ctx.newJsonParser().encodeResourceToWriter(resource, theServletResponse.getWriter());
 	}
 
 }

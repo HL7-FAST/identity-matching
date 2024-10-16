@@ -201,14 +201,14 @@ public class StarterJpaConfig {
 		return packageInstallerSvc;
 	}
 
-	@Bean
-	@Primary
-	/*
-		This bean is currently necessary to override from MDM settings
-	 */
-	IMdmLinkDao mdmLinkDao() {
-		return new MdmLinkDaoJpaImpl();
-	}
+	// @Bean
+	// @Primary
+	// /*
+	// 	This bean is currently necessary to override from MDM settings
+	//  */
+	// IMdmLinkDao mdmLinkDao() {
+	// 	return new MdmLinkDaoJpaImpl();
+	// }
 
 
 	@Bean

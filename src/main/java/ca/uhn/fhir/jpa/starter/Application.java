@@ -32,6 +32,7 @@ import org.springframework.boot.web.servlet.support.SpringBootServletInitializer
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.servlet.DispatcherServlet;
@@ -63,6 +64,9 @@ public class Application extends SpringBootServletInitializer {
 
 	@Autowired
 	SecurityConfig securityConfig;
+
+	@Autowired
+	ResourceLoader resourceLoader;
 
   public static void main(String[] args) {
 
@@ -98,9 +102,7 @@ public class Application extends SpringBootServletInitializer {
   public ServletRegistrationBean<RestfulServer> hapiServletRegistration(RestfulServer restfulServer) {
 
 	  //add custom operations
-	  IdentityMatching identityMatcher = new IdentityMatching();
-	  identityMatcher.setOrgDao(this.getDaoRegistry().getResourceDao(Patient.class));
-	  identityMatcher.setServerAddress(this.appProperties.getServer_address());
+	  IdentityMatching identityMatcher = new IdentityMatching(appProperties, this.getDaoRegistry().getResourceDao(Patient.class), resourceLoader);
 	  restfulServer.registerProviders(identityMatcher);
 
 	  //register FAST security interceptors
