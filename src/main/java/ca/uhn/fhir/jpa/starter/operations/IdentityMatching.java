@@ -19,16 +19,16 @@ import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.*;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
-import org.joda.time.LocalDate;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 
 public class IdentityMatching {
@@ -623,7 +623,7 @@ public class IdentityMatching {
 		//check for birthdate if present
 		if(refPatient.hasBirthDate())
 		{
-			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(LocalDate.fromDateFields(refPatient.getBirthDateElement().getValue()).toString()));
+			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(refPatient.getBirthDateElement().getValue().toString()));
 		}
 
 		//check gender if present
