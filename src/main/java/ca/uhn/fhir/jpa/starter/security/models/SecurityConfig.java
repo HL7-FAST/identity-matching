@@ -12,7 +12,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "security")
 public class SecurityConfig {
 	@Getter @Setter
-	Boolean enableAuthentication;
+	Boolean enableAuthentication = false;
 	@Getter @Setter
 	String issuer;
 	@Getter @Setter
