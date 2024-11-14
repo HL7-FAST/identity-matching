@@ -47,6 +47,7 @@ security:
   # cert-file: classpath:client-cert.pfx
   # cert-password: udap-test
   fetch-cert: true
+  bypass-header: X-Allow-Public-Access
 spring:
   main:
     allow-circular-references: true
@@ -94,6 +95,9 @@ spring:
 #      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticAnalysisConfigurer
 hapi:
   fhir:
+    match-validation-header: X-Match-Validation
+    match-validation-level: DEFAULT
+    
     ### This flag when enabled to true, will avail evaluate measure operations from CR Module.
     ### Flag is false by default, can be passed as command line argument to override.
     cr:

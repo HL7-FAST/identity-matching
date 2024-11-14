@@ -39,6 +39,9 @@ public class SecurityConfig {
 	@Getter @Setter
 	boolean fetchCert = true;
 
+	@Getter @Setter
+	String bypassHeader = "X-Allow-Public-Access";
+
 	public List<String> getProtectedEndpoints() {
 		if(this.protectedEndpoints.size() > 0) {
 			return List.of(this.protectedEndpoints.get(0).split("[;]"));

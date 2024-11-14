@@ -113,7 +113,7 @@ public class Application extends SpringBootServletInitializer {
 		restfulServer.registerInterceptor(securityDiscoveryInterceptor);
 
 	  IdentityMatchingAuthInterceptor authInterceptor = new IdentityMatchingAuthInterceptor(
-			securityConfig.getEnableAuthentication(), //securityConfig.getBypassHeader(),
+			securityConfig.getEnableAuthentication(), securityConfig.getBypassHeader(),
 		  securityConfig.getIssuer(), securityConfig.getPublicKey(),
 		  securityConfig.getIntrospectionUrl(), securityConfig.getClientId(), securityConfig.getClientSecret(),
 		  securityConfig.getProtectedEndpoints(), securityConfig.getPublicEndpoints());
@@ -130,7 +130,8 @@ public class Application extends SpringBootServletInitializer {
 		  CorsInterceptor corsInterceptor = (CorsInterceptor) existingCorsInterceptor;
 
 		  // Add custom header to the existing CORS configuration
-		  // corsInterceptor.getConfig().addAllowedHeader(securityConfig.getBypassHeader());
+		  corsInterceptor.getConfig().addAllowedHeader(securityConfig.getBypassHeader());
+		  corsInterceptor.getConfig().addAllowedHeader(appProperties.getMatchValidationHeader());
 	  }
 	  else {
 		  // Define your CORS configuration
@@ -140,7 +141,8 @@ public class Application extends SpringBootServletInitializer {
 		  config.addAllowedHeader("Accept");
 		  config.addAllowedHeader("X-Requested-With");
 		  config.addAllowedHeader("Content-Type");
-		  // config.addAllowedHeader(securityConfig.getBypassHeader());
+		  config.addAllowedHeader(securityConfig.getBypassHeader());
+		  config.addAllowedHeader(appProperties.getMatchValidationHeader());
 
 		  config.addAllowedOrigin("*");
 

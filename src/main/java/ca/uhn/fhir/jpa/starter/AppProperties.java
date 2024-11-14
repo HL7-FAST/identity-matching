@@ -6,6 +6,7 @@ import ca.uhn.fhir.jpa.api.config.JpaStorageSettings.ClientIdStrategyEnum;
 import ca.uhn.fhir.jpa.api.config.JpaStorageSettings.IdStrategyEnum;
 import ca.uhn.fhir.jpa.model.entity.NormalizedQuantitySearchLevel;
 import ca.uhn.fhir.jpa.packages.PackageInstallationSpec;
+import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchValidationLevel;
 import ca.uhn.fhir.rest.api.EncodingEnum;
 import lombok.Getter;
 import lombok.Setter;
@@ -969,5 +970,14 @@ public Cors getCors() {
   public void setResource_dbhistory_enabled(Boolean resource_dbhistory_enabled) {
     this.resource_dbhistory_enabled = resource_dbhistory_enabled;
   }
+
+  
+  // custom properties
+
+  @Getter @Setter
+  private String matchValidationHeader = "X-Match-Validation";
+
+  @Getter @Setter
+  private IdentityMatchValidationLevel matchValidationLevel = IdentityMatchValidationLevel.DEFAULT;
 
 }

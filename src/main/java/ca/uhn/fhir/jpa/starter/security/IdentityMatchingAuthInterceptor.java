@@ -47,6 +47,7 @@ import java.util.List;
 @Interceptor
 public class IdentityMatchingAuthInterceptor {
 	private boolean enableAuthentication = false;
+	private String bypassHeader;
 
 	private String issuer;
 
@@ -59,10 +60,10 @@ public class IdentityMatchingAuthInterceptor {
 	private List<String> publicEndpoints;
 
 	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
-	private final String allowPublicAccessHeader = "X-Allow-Public-Access";
 
-	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String issuer, String publicKey, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints, List<String> publicEndpoints) {
+	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String bypassHeader, String issuer, String publicKey, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints, List<String> publicEndpoints) {
 		this.enableAuthentication = enableAuthentication;
+		this.bypassHeader = bypassHeader;
 		this.issuer = issuer;
 		this.publicKey = publicKey;
 		this.introspectUrl = introspectUrl;
@@ -74,13 +75,18 @@ public class IdentityMatchingAuthInterceptor {
 
 	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
 	public boolean incomingRequestPostProcessed(RequestDetails details, HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException {
+
+		if (!enableAuthentication) {
+			return true;
+		}
+
 		boolean authenticated = false;
 
 		//check for public access header, if not detected then proceed with authentication checks
 		// if public access header is present, circumvent authentication and allow public access to all endpoints
 		//
 		//*** THIS IS JUST FOR RI TESTING, THIS SHOULD NOT BE INCLUDED IN A PRODUCTION SYSTEM ***
-		String publicAccessHeader = request.getHeader(allowPublicAccessHeader);
+		String publicAccessHeader = request.getHeader(bypassHeader);
 		if(publicAccessHeader == null) {
 
 			// check if request path is an endpoint that needs validation
@@ -115,7 +121,7 @@ public class IdentityMatchingAuthInterceptor {
 		}
 		else { //public access header detected or a public access point was requested - allow request
 			authenticated = true;
-			_logger.info("The 'X-Allow-Public-Access' header was detected, ignoring security configuration.");
+			_logger.info("The '" + bypassHeader + "' header was detected, ignoring security configuration.");
 		}
 
 		if(!authenticated) {

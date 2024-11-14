@@ -1,14 +1,16 @@
 package ca.uhn.fhir.jpa.starter.operations;
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.fhirpath.IFhirPath;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
 import ca.uhn.fhir.jpa.starter.AppProperties;
 import ca.uhn.fhir.jpa.starter.common.FhirContextProvider;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentifierQueryParams;
+import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchParams;
+import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchValidationLevel;
 import ca.uhn.fhir.jpa.starter.operations.models.IdentityMatchingScorer;
 import ca.uhn.fhir.model.base.composite.BaseIdentifierDt;
 import ca.uhn.fhir.model.dstu2.composite.IdentifierDt;
-import ca.uhn.fhir.parser.DataFormatException;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
@@ -17,6 +19,8 @@ import ca.uhn.fhir.rest.gclient.ICriterion;
 import ca.uhn.fhir.rest.gclient.IQuery;
 import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.*;
+import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 import org.springframework.core.io.ResourceLoader;
@@ -24,8 +28,10 @@ import org.springframework.core.io.support.ResourcePatternUtils;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,83 +42,150 @@ public class IdentityMatching {
 	private final String IDI_Patient_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient";
 	private final String IDI_Patient_L0_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L0";
 	private final String IDI_Patient_L1_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L1";
-	private boolean assertIDIPatientProfile = false;
-	private boolean assertIDIPatientL0Profile = false;
-	private boolean assertIDIPatientL1Profile = false;
+
+	private final String IDI_Patient_FhirPath = "identifier.exists() or telecom.exists() or (name.family.exists() and name.given.exists()) or (address.line.exists() and address.city.exists()) or birthDate.exists()";
+	private final String IDI_Patient_L0_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 9";
+	private final String IDI_Patient_L1_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 10";
+
+
+	private AppProperties appProperties;
 	private String serverAddress;
 	private IFhirResourceDao<Patient> patientDao;
 	private ResourceLoader resourceLoader;
 
 
 	public IdentityMatching(AppProperties appProperties, IFhirResourceDao<Patient> patientDao, ResourceLoader resourceLoader) {
+		this.appProperties = appProperties;
 		this.serverAddress = appProperties.getServer_address();
 		this.patientDao = patientDao;
 		this.resourceLoader = resourceLoader;
 	}
 
-	
-	@Operation(name = "$idi-match", typeName = "Patient", manualResponse = true)
-	public void patientMatchOperation(
+
+	/**
+	 * $match operation defined in Identity Matching IG STU1
+	 * Extends the HL7 FHIR patient $match operation: http://hl7.org/fhir/R4/patient-operation-match.html
+	 */
+	@Operation(name = "$match", typeName = "Patient")
+	public Bundle patientMatchOperation(
 		@ResourceParam Parameters params,
 		HttpServletRequest theServletRequest,
 		HttpServletResponse theServletResponse
-	) throws DataFormatException, IOException
+	) throws Exception
 	{
 
-		assertIDIPatientProfile = false;
-		assertIDIPatientL0Profile = false;
-		assertIDIPatientL1Profile = false;
-
-		FhirContext ctx = FhirContextProvider.getFhirContext();
-		IGenericClient client = ctx.newRestfulGenericClient(serverAddress);
-
-		Patient patient = null;
-		boolean onlyCertainMatches = false;
-		IntegerType count;
-		Bundle outputBundle = new Bundle();
+		IdentityMatchParams identityMatchParams = new IdentityMatchParams();
 
 		for(var param : params.getParameter()) {
 			//if a patient resource, set as patient to search against
-			if(param.getName().equals("patient") && param.getResource().getClass().equals(Patient.class))
+			if(param.getName().equals("resource") && param.getResource() != null && param.getResource().getClass().equals(Patient.class))
 			{
-				patient = (Patient)param.getResource();
+				identityMatchParams.setPatient((Patient)param.getResource());
 			}
 
 			//check for onlyCertainMatches
 			if(param.getName().equals("onlyCertainMatches"))
 			{
-				onlyCertainMatches = ((BooleanType) param.getValue()).booleanValue();
+				identityMatchParams.setOnlyCertainMatches((BooleanType) param.getValue());
 			}
 
 			//check for count
 			if(param.getName().equals("count"))
 			{
-				count = (IntegerType)param.getValue();
+				identityMatchParams.setCount((IntegerType)param.getValue());
 			}
-
 		}
 
 
 		// Patient resource must be provided and the parameter must be named "patient"
-		if (patient == null) {
+		if (identityMatchParams.getPatient() == null) {
+
+			String message = "A parameter named 'resource' must be provided with a valid Patient resource.";
 			OperationOutcome outcome = new OperationOutcome();
 			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
-				.setDiagnostics("A parameter named 'patient' must be provided with a valid Patient resource.");
+				.setDiagnostics(message);
 			
-			writeResponse(theServletRequest, theServletResponse, outcome, HttpServletResponse.SC_BAD_REQUEST);
-			return;
+			throw new InvalidRequestException(message, outcome);
 		}
 
+		return doMatch(identityMatchParams, theServletRequest, theServletResponse);
 
-		//check profile assertions
-		List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
-		for(CanonicalType profile : metaProfiles) {
-			switch(profile.getValue()) {
-				case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
-				case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
-				case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
+	}
+
+	
+	/**
+	 * $idi-match operation defined in Identity Matching IG STU2
+	 */
+	@Operation(name = "$idi-match", typeName = "Patient")
+	public Bundle idiMatchOperation(
+		@ResourceParam Parameters params,
+		HttpServletRequest theServletRequest,
+		HttpServletResponse theServletResponse
+	) throws IOException
+	{
+
+		IdentityMatchParams identityMatchParams = new IdentityMatchParams();
+
+		for(var param : params.getParameter()) {
+			//if a patient resource, set as patient to search against
+			if(param.getName().equals("patient") && param.getResource() != null && param.getResource().getClass().equals(Patient.class))
+			{
+				identityMatchParams.setPatient((Patient)param.getResource());
+			}
+
+			//check for onlyCertainMatches
+			if(param.getName().equals("onlyCertainMatches"))
+			{
+				identityMatchParams.setOnlyCertainMatches((BooleanType) param.getValue());
+			}
+
+			//check for count
+			if(param.getName().equals("count"))
+			{
+				identityMatchParams.setCount((IntegerType)param.getValue());
 			}
 		}
+
+
+		// Patient resource must be provided and the parameter must be named "patient"
+		if (identityMatchParams.getPatient() == null) {
+
+			String message = "A parameter named 'patient' must be provided with a valid Patient resource.";
+			OperationOutcome outcome = new OperationOutcome();
+			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
+				.setDiagnostics(message);
+			
+			throw new InvalidRequestException(message, outcome);
+		}
+
+		return doMatch(identityMatchParams, theServletRequest, theServletResponse);
+
+	}
+
+
+	protected Bundle doMatch(
+		IdentityMatchParams params,
+		HttpServletRequest theServletRequest,
+		HttpServletResponse theServletResponse
+	) throws IOException 
+	{
+
+		// assertIDIPatientProfile = false;
+		// assertIDIPatientL0Profile = false;
+		// assertIDIPatientL1Profile = false;
+
+		FhirContext ctx = FhirContextProvider.getFhirContext();
+		IGenericClient client = ctx.newRestfulGenericClient(serverAddress);
+
+		Patient patient = params.getPatient();
+		BooleanType onlyCertainMatches = params.getOnlyCertainMatches();
+		IntegerType count = params.getCount();
+		Bundle outputBundle = new Bundle();
+		
+		
+		// ensure we have a valid Patient resource
+		assertPatientIsValid(patient, theServletRequest);
+
 
 		//build out identifier search params and base identifier params by traversing the identifiers
 		List<IdentifierQueryParams> identifierParams = new ArrayList<>();
@@ -274,18 +347,126 @@ public class IdentityMatching {
 			outputBundle.getEntry().add(0, createBundleEntry(exampleOrg));
 		}		
 		else {
+			String message = "Organization-OrgExample.json file not found.";
 			OperationOutcome outcome = new OperationOutcome();
 			outcome.addIssue().setCode(OperationOutcome.IssueType.EXCEPTION).setSeverity(OperationOutcome.IssueSeverity.ERROR)
-				.setDiagnostics("Organization-OrgExample.json file not found.");
+				.setDiagnostics(message);
 
-			writeResponse(theServletRequest, theServletResponse, outcome, HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+			throw new InternalErrorException(message, outcome);
 		}
 
 		// add organization to identifier property
 		Reference orgRef = new Reference("http://example.org/Organization/" + exampleOrg.getIdPart());
 		outputBundle.setIdentifier(new Identifier().setAssigner(orgRef));
 
-		writeResponse(theServletRequest, theServletResponse, outputBundle, HttpServletResponse.SC_OK);
+		return outputBundle;
+
+	}
+
+	private void assertPatientIsValid(Patient patient, HttpServletRequest theServletRequest) {
+
+		// Patient resource must be provided
+		if (patient == null) {
+			String message = "A valid Patient resource must be provided.";
+			OperationOutcome outcome = new OperationOutcome();
+			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
+				.setDiagnostics(message);
+			
+			throw new InvalidRequestException(message, outcome);
+		}
+
+		// Validate the Patient resource if configured
+
+		IdentityMatchValidationLevel validationLevel = appProperties.getMatchValidationLevel();
+
+		// override validationLevel to the value of the header if it is a valid value of the enum
+		String matchHeader = theServletRequest.getHeader(appProperties.getMatchValidationHeader());
+		if (matchHeader != null) {
+			try {
+				validationLevel = IdentityMatchValidationLevel.valueOf(matchHeader.toUpperCase());
+			} catch (IllegalArgumentException e) {
+				throw new InvalidRequestException("Invalid value for " + appProperties.getMatchValidationHeader() + " header: \"" + matchHeader 
+					+ "\". Valid values are: " 
+					+ EnumSet.allOf(IdentityMatchValidationLevel.class).stream().map(Enum::toString).collect(Collectors.joining(", "))
+				);
+			}
+		}
+
+		// no validation required
+		if (validationLevel == IdentityMatchValidationLevel.NONE) {
+			return;
+		}
+		
+		// check if the Patient resource declares conformance to an expected profile
+		boolean assertIDIPatientProfile = false;
+	 	boolean assertIDIPatientL0Profile = false;
+		boolean assertIDIPatientL1Profile = false;
+		List<CanonicalType> metaProfiles = patient.getMeta().getProfile();
+		for(CanonicalType profile : metaProfiles) {
+			switch(profile.getValue()) {
+				case(IDI_Patient_L1_Profile): { assertIDIPatientL1Profile = true; } break;
+				case(IDI_Patient_L0_Profile): { assertIDIPatientL0Profile = true; } break;
+				case(IDI_Patient_Profile): { assertIDIPatientProfile = true; } break;
+			}
+		}
+
+		// if the server is configured to require a profile in the meta.profile,
+		// throw an error if the Patient resource does not declare conformance to an expected profile
+		if (validationLevel == IdentityMatchValidationLevel.META_PROFILE) {
+			if (!(assertIDIPatientProfile || assertIDIPatientL0Profile || assertIDIPatientL1Profile)) {
+				String message = "The Patient resource must declare conformance to an appropriate IDI-Patient profile in the meta.profile field.";
+				OperationOutcome outcome = new OperationOutcome();
+				outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
+					.setDiagnostics(message);
+				
+				throw new InvalidRequestException(message, outcome);
+			}
+		}
+
+
+		// default validation level starts here
+		// validate the resource against the most restrictive profile declared or the base IDI-Patient profile
+
+		// ValidationResult result = validator.validateWithResult(patient);
+		IFhirPath fhirPath = FhirContextProvider.getFhirContext().newFhirPath(); //.evaluateFirst(patient, IDI_Patient_FhirPath, BooleanType.class);
+
+		String message = null;
+
+		
+
+		// IDI-Patient L1 profile validation
+		if (assertIDIPatientL1Profile) {
+			System.out.println("Evaluating IDI-Patient-L1 profile");
+			var result = fhirPath.evaluateFirst(patient, IDI_Patient_L1_FhirPath, BooleanType.class);
+			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
+				message = "The Patient resource does not meet the requirements of the IDI-Patient-L1 profile.";
+			}
+		}
+
+		// IDI-Patient L0 profile validation
+		else if (assertIDIPatientL0Profile) {
+			System.out.println("Evaluating IDI-Patient-L0 profile");
+			var result = fhirPath.evaluateFirst(patient, IDI_Patient_L0_FhirPath, BooleanType.class);
+			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
+				message = "The Patient resource does not meet the requirements of the IDI-Patient-L0 profile.";
+			}
+		}
+
+		// base IDI-Patient profile validation
+		else {
+			System.out.println("Evaluating IDI-Patient profile");
+			var result = fhirPath.evaluateFirst(patient, IDI_Patient_FhirPath, BooleanType.class);
+			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
+				message = "The Patient resource does not meet the requirements of the IDI-Patient profile.";
+			}
+		}
+
+
+		if (message != null) {
+			OperationOutcome outcome = new OperationOutcome();
+			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR).setDiagnostics(message);
+			throw new InvalidRequestException(message, outcome);
+		}
 
 	}
 
@@ -474,19 +655,19 @@ public class IdentityMatching {
 	}
 
 
-	private String getProfileAssertion() {
-		if(assertIDIPatientProfile) {
-			return IDI_Patient_Profile;
-		}
-		else if(assertIDIPatientL0Profile) {
-			return  IDI_Patient_L0_Profile;
-		}
-		else if(assertIDIPatientL1Profile) {
-			return IDI_Patient_L1_Profile;
-		}
+	// private String getProfileAssertion() {
+	// 	if(assertIDIPatientProfile) {
+	// 		return IDI_Patient_Profile;
+	// 	}
+	// 	else if(assertIDIPatientL0Profile) {
+	// 		return  IDI_Patient_L0_Profile;
+	// 	}
+	// 	else if(assertIDIPatientL1Profile) {
+	// 		return IDI_Patient_L1_Profile;
+	// 	}
 
-		return "No profile provided";
-	}
+	// 	return "No profile provided";
+	// }
 
 	private IdentityMatchingScorer gradePatientReference(Patient referencePatient) {
 		IdentityMatchingScorer refScorer = new IdentityMatchingScorer();
@@ -566,22 +747,22 @@ public class IdentityMatching {
 
 	}
 
-	private boolean passesProfileAssertion(IdentityMatchingScorer refScorer) {
-		Integer scoredWeight = refScorer.getMatchWeight();
+	// private boolean passesProfileAssertion(IdentityMatchingScorer refScorer) {
+	// 	Integer scoredWeight = refScorer.getMatchWeight();
 
-		if(assertIDIPatientProfile) {
-			return true;
-		}
-		else if(assertIDIPatientL0Profile) {
-			return scoredWeight >= 9;
-		}
-		else if(assertIDIPatientL1Profile) {
-			return scoredWeight >= 10;
-		}
-		else {
-			return false;
-		}
-	}
+	// 	if(assertIDIPatientProfile) {
+	// 		return true;
+	// 	}
+	// 	else if(assertIDIPatientL0Profile) {
+	// 		return scoredWeight >= 9;
+	// 	}
+	// 	else if(assertIDIPatientL1Profile) {
+	// 		return scoredWeight >= 10;
+	// 	}
+	// 	else {
+	// 		return false;
+	// 	}
+	// }
 
 
 	//TESTING DOA
@@ -623,7 +804,7 @@ public class IdentityMatching {
 		//check for birthdate if present
 		if(refPatient.hasBirthDate())
 		{
-			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(refPatient.getBirthDateElement().getValue().toString()));
+			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(ParamPrefixEnum.EQUAL, refPatient.getBirthDateElement().getValue()));
 		}
 
 		//check gender if present
@@ -717,12 +898,12 @@ public class IdentityMatching {
 	}
 
 
-	private void writeResponse(HttpServletRequest theServletRequest, HttpServletResponse theServletResponse, Resource resource, int reponseStatus) throws IOException {
-		theServletResponse.setStatus(reponseStatus);
-		theServletResponse.setContentType("application/fhir+json");
+	// private void writeResponse(HttpServletRequest theServletRequest, HttpServletResponse theServletResponse, Resource resource, int reponseStatus) throws IOException {
+	// 	theServletResponse.setStatus(reponseStatus);
+	// 	theServletResponse.setContentType("application/fhir+json");
 
-		FhirContext ctx = FhirContextProvider.getFhirContext();
-		ctx.newJsonParser().encodeResourceToWriter(resource, theServletResponse.getWriter());
-	}
+	// 	FhirContext ctx = FhirContextProvider.getFhirContext();
+	// 	ctx.newJsonParser().encodeResourceToWriter(resource, theServletResponse.getWriter());
+	// }
 
 }
