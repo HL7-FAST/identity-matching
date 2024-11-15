@@ -95,6 +95,8 @@ spring:
 #      hibernate.search.backend.analysis.configurer: ca.uhn.fhir.jpa.search.HapiHSearchAnalysisConfigurers$HapiElasticAnalysisConfigurer
 hapi:
   fhir:
+    initialdata:
+      - examples
     match-validation-header: X-Match-Validation
     match-validation-level: DEFAULT
     

@@ -975,6 +975,9 @@ public Cors getCors() {
   // custom properties
 
   @Getter @Setter
+  private List<String> initialData = new ArrayList<>();
+
+  @Getter @Setter
   private String matchValidationHeader = "X-Match-Validation";
 
   @Getter @Setter

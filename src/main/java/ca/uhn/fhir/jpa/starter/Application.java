@@ -7,6 +7,7 @@ import ca.uhn.fhir.jpa.starter.annotations.OnEitherVersion;
 import ca.uhn.fhir.jpa.starter.cdshooks.StarterCdsHooksConfig;
 import ca.uhn.fhir.jpa.starter.cr.StarterCrDstu3Config;
 import ca.uhn.fhir.jpa.starter.cr.StarterCrR4Config;
+import ca.uhn.fhir.jpa.starter.custom.DataInitializer;
 import ca.uhn.fhir.jpa.starter.mdm.MdmConfig;
 import ca.uhn.fhir.jpa.starter.operations.IdentityMatching;
 import ca.uhn.fhir.jpa.starter.security.CertInterceptor;
@@ -162,6 +163,13 @@ public class Application extends SpringBootServletInitializer {
     servletRegistrationBean.setLoadOnStartup(2);
 
     return servletRegistrationBean;
+  }
+
+
+	// Ensure data is loaded when the application starts
+  @Bean
+  public DataInitializer dataInitializer() {
+    return new DataInitializer();
   }
 
 }

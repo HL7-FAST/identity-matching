@@ -26,7 +26,6 @@ import org.hl7.fhir.r4.model.*;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -67,7 +66,7 @@ public class IdentityMatching {
 	 * Extends the HL7 FHIR patient $match operation: http://hl7.org/fhir/R4/patient-operation-match.html
 	 */
 	@Operation(name = "$match", typeName = "Patient")
-	public Bundle patientMatchOperation(
+	public Resource patientMatchOperation(
 		@ResourceParam Parameters params,
 		HttpServletRequest theServletRequest,
 		HttpServletResponse theServletResponse
@@ -117,7 +116,7 @@ public class IdentityMatching {
 	 * $idi-match operation defined in Identity Matching IG STU2
 	 */
 	@Operation(name = "$idi-match", typeName = "Patient")
-	public Bundle idiMatchOperation(
+	public Resource idiMatchOperation(
 		@ResourceParam Parameters params,
 		HttpServletRequest theServletRequest,
 		HttpServletResponse theServletResponse
@@ -163,7 +162,7 @@ public class IdentityMatching {
 	}
 
 
-	protected Bundle doMatch(
+	protected Resource doMatch(
 		IdentityMatchParams params,
 		HttpServletRequest theServletRequest,
 		HttpServletResponse theServletResponse
@@ -334,6 +333,19 @@ public class IdentityMatching {
 			// pf.setSearch(searchComp);
 
 		}
+
+
+
+		// no matches found... return an OperationOutcome instead
+		if (outputBundle.getEntry().isEmpty()) {
+			String message = "No matches found.";
+			OperationOutcome outcome = new OperationOutcome();
+			outcome.addIssue().setCode(OperationOutcome.IssueType.NOTFOUND).setSeverity(OperationOutcome.IssueSeverity.INFORMATION)
+				.setDiagnostics(message);
+
+			return outcome;
+		}
+
 
 		outputBundle.setType(Bundle.BundleType.COLLECTION);
 		outputBundle.setMeta(new Meta().addProfile("http://hl7.org/fhir/us/identity-matching/StructureDefinition/idi-match-bundle"));

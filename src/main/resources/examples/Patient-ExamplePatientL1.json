@@ -1,0 +1,69 @@
+{
+  "resourceType": "Patient",
+  "id": "ExamplePatientL1",
+  "meta": {
+    "lastUpdated": "2021-11-01T13:26:22.0314215+00:00",
+    "profile": [
+      "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L1"
+    ]
+  },
+  "language": "en-US",
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en-US\" lang=\"en-US\"><p class=\"res-header-id\"><b>Generated Narrative: Patient ExamplePatientL1</b></p><a name=\"ExamplePatientL1\"> </a><a name=\"hcExamplePatientL1\"> </a><a name=\"ExamplePatientL1-en-US\"> </a><div style=\"display: inline-block; background-color: #d9e0e7; padding: 6px; margin: 4px; border: 1px solid #8da1b4; border-radius: 5px; line-height: 60%\"><p style=\"margin-bottom: 0px\">Last updated: 2021-11-01 13:26:22+0000; Language: en-US</p><p style=\"margin-bottom: 0px\">Profile: <a href=\"StructureDefinition-IDI-Patient-L1.html\">IDI Patient L1</a></p></div><p style=\"border: 1px #661aff solid; background-color: #e6e6ff; padding: 10px;\">Justin Case  Female, DoB: 1992-05-17 ( Driver's license number)</p><hr/><table class=\"grid\"><tr><td style=\"background-color: #f3f5da\" title=\"Record is active\">Active:</td><td>true</td><td style=\"background-color: #f3f5da\" title=\"Known Marital status of Patient\">Marital Status:</td><td colspan=\"3\"><span title=\"Codes:{http://terminology.hl7.org/CodeSystem/v3-NullFlavor UNK}\">unknown</span></td></tr><tr><td style=\"background-color: #f3f5da\" title=\"Ways to contact the Patient\">Contact Detail</td><td colspan=\"3\"><ul><li>ph: 726-555-2900(Mobile)</li><li>418 Teapot Lane Raleigh NC 27513 </li></ul></td></tr></table></div>"
+  },
+  "identifier": [
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+            "code": "DL"
+          }
+        ]
+      },
+      "system": "http://terminology.hl7.org/NamingSystem/NorthCarolinaDLN",
+      "value": "3902-16532901",
+      "assigner": {
+        "display": "North Carolina"
+      }
+    }
+  ],
+  "active": true,
+  "name": [
+    {
+      "family": "Case",
+      "given": [
+        "Justin"
+      ]
+    }
+  ],
+  "telecom": [
+    {
+      "system": "phone",
+      "value": "726-555-2900",
+      "use": "mobile"
+    }
+  ],
+  "gender": "female",
+  "birthDate": "1992-05-17",
+  "address": [
+    {
+      "type": "physical",
+      "line": [
+        "418 Teapot Lane"
+      ],
+      "city": "Raleigh",
+      "state": "NC",
+      "postalCode": "27513"
+    }
+  ],
+  "maritalStatus": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v3-NullFlavor",
+        "code": "UNK"
+      }
+    ]
+  }
+}
