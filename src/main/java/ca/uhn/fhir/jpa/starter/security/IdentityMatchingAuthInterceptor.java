@@ -4,6 +4,7 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
+import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 
 import com.auth0.jwk.Jwk;
 import com.auth0.jwk.JwkProvider;
@@ -27,7 +28,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
-import javax.naming.AuthenticationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -111,6 +111,7 @@ public class IdentityMatchingAuthInterceptor {
 				} catch (AuthenticationException ex) {
 					_logger.error(ex.getMessage(), ex);
 					_logger.info("Failed to authenticate request");
+					throw ex;
 				} catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
 					throw new RuntimeException(ex);
 				}
@@ -125,10 +126,10 @@ public class IdentityMatchingAuthInterceptor {
 		}
 
 		if(!authenticated) {
-			response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-			response.getWriter().println("You are unauthorized to perform this request.");
+			throw new AuthenticationException("You are unauthorized to perform this request.");
 		}
-		return authenticated;
+
+		return true;
 	}
 
 	private boolean introspectionCheck(String authHeader) throws JsonProcessingException {

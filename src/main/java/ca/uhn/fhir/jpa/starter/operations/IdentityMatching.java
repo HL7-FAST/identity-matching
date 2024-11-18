@@ -15,20 +15,15 @@ import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
-import ca.uhn.fhir.rest.gclient.ICriterion;
-import ca.uhn.fhir.rest.gclient.IQuery;
-import ca.uhn.fhir.rest.gclient.StringClientParam;
 import ca.uhn.fhir.rest.param.*;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
-import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -107,7 +102,15 @@ public class IdentityMatching {
 			throw new InvalidRequestException(message, outcome);
 		}
 
-		return doMatch(identityMatchParams, theServletRequest, theServletResponse);
+		Resource output = doMatch(identityMatchParams, theServletRequest, theServletResponse);
+
+		if (output.getResourceType() == ResourceType.Bundle) {
+			Bundle bundle = (Bundle)output;
+			bundle.setType(Bundle.BundleType.SEARCHSET);
+			bundle.setTotal(bundle.getEntry().size());
+		}
+
+		return output;
 
 	}
 
@@ -157,8 +160,43 @@ public class IdentityMatching {
 			throw new InvalidRequestException(message, outcome);
 		}
 
-		return doMatch(identityMatchParams, theServletRequest, theServletResponse);
+		Resource output = doMatch(identityMatchParams, theServletRequest, theServletResponse);
 
+		if (output.getResourceType() == ResourceType.Bundle) {
+
+			Bundle bundle = (Bundle)output;
+
+			bundle.setType(Bundle.BundleType.COLLECTION);
+			output.setMeta(new Meta().addProfile("http://hl7.org/fhir/us/identity-matching/StructureDefinition/idi-match-bundle"));
+
+			// add example Organization to the output bundle as the first entry
+			var resource = ResourcePatternUtils.getResourcePatternResolver(resourceLoader).getResource("classpath:Organization-OrgExample.json");
+			String resourceText = new String(resource.getInputStream().readAllBytes());
+			FhirContext ctx = FhirContextProvider.getFhirContext();
+			Organization exampleOrg = ctx.newJsonParser().parseResource(Organization.class, resourceText);
+
+			if (exampleOrg != null) {
+				bundle.getEntry().add(0, createBundleEntry(exampleOrg));
+			}		
+			else {
+				String message = "Organization-OrgExample.json file not found.";
+				OperationOutcome outcome = new OperationOutcome();
+				outcome.addIssue().setCode(OperationOutcome.IssueType.EXCEPTION).setSeverity(OperationOutcome.IssueSeverity.ERROR)
+					.setDiagnostics(message);
+
+				throw new InternalErrorException(message, outcome);
+			}
+
+			// add organization to identifier property
+			Reference orgRef = new Reference("http://example.org/Organization/" + exampleOrg.getIdPart());
+			bundle.setIdentifier(new Identifier().setAssigner(orgRef));
+
+
+			// bundle of type "collection" cannot have a search property in the entry
+			bundle.getEntry().forEach(x -> x.setSearch(null));
+		}
+
+		return output;
 	}
 
 
@@ -222,6 +260,7 @@ public class IdentityMatching {
 				List<Identifier> identifiers = patientEntry.getIdentifier();
 				for(IdentifierQueryParams id : identifierParams) {
 					identifiers.stream().forEach(x -> {
+
 						if(x.getSystem().equals(id.getIdentifierSystem()) && x.getValue().equals(id.getIdentifierValue())) {
 							//TODO: figure out if there is a class/enum that represents the identifier codes rather than hard code them
 							//http://build.fhir.org/ig/HL7/fhir-identity-matching-ig/ValueSet-Identity-Identifier-vs.html
@@ -280,12 +319,12 @@ public class IdentityMatching {
 			if(patient.hasAddress() && patientEntry.hasAddress()) {
 				for(Address epAddress : patientEntry.getAddress()) {
 					for(Address rpAddress : patient.getAddress()) {
-						if(rpAddress.getLine().stream().anyMatch(new HashSet<>(epAddress.getLine())::contains)) {
+						if(rpAddress.getLine().stream().map(StringType::toString).anyMatch(line -> epAddress.getLine().stream().map(StringType::toString).anyMatch(line::equals))) {
 							scorer.setAddressLineMatch(true);
 						}
-						if(rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
-						if(rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
-						if(rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
+						if(rpAddress.getCity() != null && rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
+						if(rpAddress.getState() != null && rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
+						if(rpAddress.getPostalCode() != null && rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
 					}
 				}
 			}
@@ -302,7 +341,7 @@ public class IdentityMatching {
 					}
 					else if(com.hasSystem() && com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
 						for (ContactPoint refCom : patient.getTelecom()) {
-							if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+							if (refCom.hasSystem() && refCom.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
 								if(com.getValue().equals(refCom.getValue())) { scorer.setEmailMatch(true); }
 							}
 						}
@@ -311,9 +350,9 @@ public class IdentityMatching {
 			}
 
 			//create bundle search component element
-			// Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
-			// searchComp.setMode(Bundle.SearchEntryMode.MATCH);
-			// searchComp.setScore(scorer.scoreMatch());
+			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
+			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
+			searchComp.setScore(scorer.scoreMatch());
 
 			//Add extension to place match messages
 			// Extension extExplanation = new Extension();
@@ -330,7 +369,7 @@ public class IdentityMatching {
 			// 	searchComp.addExtension(extAssertion);
 			// }
 
-			// pf.setSearch(searchComp);
+			pf.setSearch(searchComp);
 
 		}
 
@@ -346,30 +385,6 @@ public class IdentityMatching {
 			return outcome;
 		}
 
-
-		outputBundle.setType(Bundle.BundleType.COLLECTION);
-		outputBundle.setMeta(new Meta().addProfile("http://hl7.org/fhir/us/identity-matching/StructureDefinition/idi-match-bundle"));
-
-		// add example Organization to the output bundle as the first entry
-		var resource = ResourcePatternUtils.getResourcePatternResolver(resourceLoader).getResource("classpath:Organization-OrgExample.json");
-		String resourceText = new String(resource.getInputStream().readAllBytes());
-		Organization exampleOrg = ctx.newJsonParser().parseResource(Organization.class, resourceText);
-
-		if (exampleOrg != null) {
-			outputBundle.getEntry().add(0, createBundleEntry(exampleOrg));
-		}		
-		else {
-			String message = "Organization-OrgExample.json file not found.";
-			OperationOutcome outcome = new OperationOutcome();
-			outcome.addIssue().setCode(OperationOutcome.IssueType.EXCEPTION).setSeverity(OperationOutcome.IssueSeverity.ERROR)
-				.setDiagnostics(message);
-
-			throw new InternalErrorException(message, outcome);
-		}
-
-		// add organization to identifier property
-		Reference orgRef = new Reference("http://example.org/Organization/" + exampleOrg.getIdPart());
-		outputBundle.setIdentifier(new Identifier().setAssigner(orgRef));
 
 		return outputBundle;
 
@@ -448,7 +463,6 @@ public class IdentityMatching {
 
 		// IDI-Patient L1 profile validation
 		if (assertIDIPatientL1Profile) {
-			System.out.println("Evaluating IDI-Patient-L1 profile");
 			var result = fhirPath.evaluateFirst(patient, IDI_Patient_L1_FhirPath, BooleanType.class);
 			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
 				message = "The Patient resource does not meet the requirements of the IDI-Patient-L1 profile.";
@@ -457,7 +471,6 @@ public class IdentityMatching {
 
 		// IDI-Patient L0 profile validation
 		else if (assertIDIPatientL0Profile) {
-			System.out.println("Evaluating IDI-Patient-L0 profile");
 			var result = fhirPath.evaluateFirst(patient, IDI_Patient_L0_FhirPath, BooleanType.class);
 			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
 				message = "The Patient resource does not meet the requirements of the IDI-Patient-L0 profile.";
@@ -466,7 +479,6 @@ public class IdentityMatching {
 
 		// base IDI-Patient profile validation
 		else {
-			System.out.println("Evaluating IDI-Patient profile");
 			var result = fhirPath.evaluateFirst(patient, IDI_Patient_FhirPath, BooleanType.class);
 			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
 				message = "The Patient resource does not meet the requirements of the IDI-Patient profile.";
@@ -482,189 +494,189 @@ public class IdentityMatching {
 
 	}
 
-	private List<Bundle.BundleEntryComponent> executeMatchQuery(IGenericClient client, ICriterion criterion) {
+	// private List<Bundle.BundleEntryComponent> executeMatchQuery(IGenericClient client, ICriterion criterion) {
 
-		IQuery<Bundle> patientQuery = client.search()
-			.forResource(Patient.class)
-			.returnBundle(Bundle.class);
+	// 	IQuery<Bundle> patientQuery = client.search()
+	// 		.forResource(Patient.class)
+	// 		.returnBundle(Bundle.class);
 
-		return patientQuery.where(criterion).execute().getEntry();
+	// 	return patientQuery.where(criterion).execute().getEntry();
 
-	}
+	// }
 
-	private boolean uniquePatientMatch(Bundle.BundleEntryComponent newComponent, List<Bundle.BundleEntryComponent> prevComponents) {
-		return prevComponents.stream().anyMatch(x -> x.getFullUrl().equals(newComponent.getFullUrl()));
-	}
+	// private boolean uniquePatientMatch(Bundle.BundleEntryComponent newComponent, List<Bundle.BundleEntryComponent> prevComponents) {
+	// 	return prevComponents.stream().anyMatch(x -> x.getFullUrl().equals(newComponent.getFullUrl()));
+	// }
 
-	private Bundle matchPatients(Patient patient, IGenericClient client, List<BaseIdentifierDt> baseIdentifierParams) {
+	// private Bundle matchPatients(Patient patient, IGenericClient client, List<BaseIdentifierDt> baseIdentifierParams) {
 
-		Bundle patientBundle = new Bundle();
+	// 	Bundle patientBundle = new Bundle();
 
-		//TODO: build query based on profile assertion
+	// 	//TODO: build query based on profile assertion
 
-		//Check for identifiers if present
-		if(baseIdentifierParams.size() > 0)
-		{
-			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams))) {
-				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-					patientBundle.addEntry(comp);
-				}
-			}
-		}
+	// 	//Check for identifiers if present
+	// 	if(baseIdentifierParams.size() > 0)
+	// 	{
+	// 		for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams))) {
+	// 			if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 				patientBundle.addEntry(comp);
+	// 			}
+	// 		}
+	// 	}
 
-		//check for family name if present, choose the most recent (first)
-		if(patient.getName().get(0).getFamily() != null) {
-			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()))) {
-				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-					patientBundle.addEntry(comp);
-				}
-			}
-		}
+	// 	//check for family name if present, choose the most recent (first)
+	// 	if(patient.getName().get(0).getFamily() != null) {
+	// 		for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()))) {
+	// 			if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 				patientBundle.addEntry(comp);
+	// 			}
+	// 		}
+	// 	}
 
-		//check for given name if present, check joined given names
-		if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
-		{
-			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()))) {
-				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-					patientBundle.addEntry(comp);
-				}
-			}
-			//patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
-		}
+	// 	//check for given name if present, check joined given names
+	// 	if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
+	// 	{
+	// 		for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()))) {
+	// 			if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 				patientBundle.addEntry(comp);
+	// 			}
+	// 		}
+	// 		//patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
+	// 	}
 
-		//TODO: Add middle name/initial
+	// 	//TODO: Add middle name/initial
 
-		//check for birthdate if present
-		if(patient.hasBirthDate())
-		{
-			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.BIRTHDATE.exactly().day(patient.getBirthDate()))) {
-				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-					patientBundle.addEntry(comp);
-				}
-			}
-			//patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
-		}
+	// 	//check for birthdate if present
+	// 	if(patient.hasBirthDate())
+	// 	{
+	// 		for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.BIRTHDATE.exactly().day(patient.getBirthDate()))) {
+	// 			if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 				patientBundle.addEntry(comp);
+	// 			}
+	// 		}
+	// 		//patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
+	// 	}
 
-		//check gender if present
-		if(patient.hasGender())
-		{
-			for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.GENDER.exactly().code(patient.getGender().toCode()))) {
-				if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-					patientBundle.addEntry(comp);
-				}
-			}
-			//patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
-		}
+	// 	//check gender if present
+	// 	if(patient.hasGender())
+	// 	{
+	// 		for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, Patient.GENDER.exactly().code(patient.getGender().toCode()))) {
+	// 			if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 				patientBundle.addEntry(comp);
+	// 			}
+	// 		}
+	// 		//patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
+	// 	}
 
-		//check for address if present
-		if(patient.hasAddress()) {
-			for (Address x : patient.getAddress()) {
-				List<String> addressValues = new ArrayList<>();
-				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
-				addressValues.add(x.getCity());
-				addressValues.add(x.getState());
-				addressValues.add(x.getPostalCode());
+	// 	//check for address if present
+	// 	if(patient.hasAddress()) {
+	// 		for (Address x : patient.getAddress()) {
+	// 			List<String> addressValues = new ArrayList<>();
+	// 			x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
+	// 			addressValues.add(x.getCity());
+	// 			addressValues.add(x.getState());
+	// 			addressValues.add(x.getPostalCode());
 
-				for (Bundle.BundleEntryComponent comp : executeMatchQuery(client, Patient.ADDRESS.contains().values(addressValues))) {
-					if (patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-						patientBundle.addEntry(comp);
-					}
-				}
-				//patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
-			}
-		}
-		//check telecom if present
-		if(patient.hasTelecom())
-		{
-			for (ContactPoint x : patient.getTelecom()) {
-				if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-					StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
-					for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, phoneParam.matchesExactly().value(x.getValue()))) {
-						if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-							patientBundle.addEntry(comp);
-						}
-					}
-					//patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
-				} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-					StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
-					for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, emailParam.matchesExactly().value(x.getValue()))) {
-						if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
-							patientBundle.addEntry(comp);
-						}
-					}
-					//patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
-				}
-			}
-		}
+	// 			for (Bundle.BundleEntryComponent comp : executeMatchQuery(client, Patient.ADDRESS.contains().values(addressValues))) {
+	// 				if (patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 					patientBundle.addEntry(comp);
+	// 				}
+	// 			}
+	// 			//patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
+	// 		}
+	// 	}
+	// 	//check telecom if present
+	// 	if(patient.hasTelecom())
+	// 	{
+	// 		for (ContactPoint x : patient.getTelecom()) {
+	// 			if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+	// 				StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
+	// 				for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, phoneParam.matchesExactly().value(x.getValue()))) {
+	// 					if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 						patientBundle.addEntry(comp);
+	// 					}
+	// 				}
+	// 				//patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
+	// 			} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+	// 				StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
+	// 				for(Bundle.BundleEntryComponent comp: executeMatchQuery(client, emailParam.matchesExactly().value(x.getValue()))) {
+	// 					if(patientBundle.getEntry().isEmpty() || !uniquePatientMatch(comp, patientBundle.getEntry())) {
+	// 						patientBundle.addEntry(comp);
+	// 					}
+	// 				}
+	// 				//patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
+	// 			}
+	// 		}
+	// 	}
 
-		return patientBundle;
+	// 	return patientBundle;
 
-	}
+	// }
 
 	//DEPRECATED
-	private IQuery<Bundle> buildMatchQuery(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
+	// private IQuery<Bundle> buildMatchQuery(Patient patient, IGenericClient client, List<IdentifierQueryParams> identifierParams, List<BaseIdentifierDt> baseIdentifierParams) {
 
-		IQuery<Bundle> patientQuery = client.search()
-			.forResource(Patient.class)
-			.returnBundle(Bundle.class);
+	// 	IQuery<Bundle> patientQuery = client.search()
+	// 		.forResource(Patient.class)
+	// 		.returnBundle(Bundle.class);
 
-		//Check for identifiers if present
-		if(baseIdentifierParams.size() > 0)
-		{
-			patientQuery.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams));
-		}
+	// 	//Check for identifiers if present
+	// 	if(baseIdentifierParams.size() > 0)
+	// 	{
+	// 		patientQuery.where(Patient.IDENTIFIER.exactly().identifiers(baseIdentifierParams));
+	// 	}
 
-		//check for family name if present, choose the most recent (first)
-		if(patient.getName().get(0).getFamily() != null) {
-			patientQuery.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()));
-		}
+	// 	//check for family name if present, choose the most recent (first)
+	// 	if(patient.getName().get(0).getFamily() != null) {
+	// 		patientQuery.where(Patient.FAMILY.matchesExactly().values(patient.getName().get(0).getFamily()));
+	// 	}
 
-		//check for given name if present, check joined given names
-		if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
-		{
-			patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
-		}
+	// 	//check for given name if present, check joined given names
+	// 	if(StringUtils.isNotEmpty(patient.getName().get(0).getGivenAsSingleString()))
+	// 	{
+	// 		patientQuery.where(Patient.GIVEN.matches().values(patient.getName().get(0).getGivenAsSingleString()));
+	// 	}
 
-		//check for birthdate if present
-		if(patient.hasBirthDate())
-		{
-			patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
-		}
+	// 	//check for birthdate if present
+	// 	if(patient.hasBirthDate())
+	// 	{
+	// 		patientQuery.where(Patient.BIRTHDATE.exactly().day(patient.getBirthDate()));
+	// 	}
 
-		//check gender if present
-		if(patient.hasGender())
-		{
-			patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
-		}
+	// 	//check gender if present
+	// 	if(patient.hasGender())
+	// 	{
+	// 		patientQuery.where(Patient.GENDER.exactly().code(patient.getGender().toCode()));
+	// 	}
 
-		//check for address if present
-		if(patient.hasAddress())
-			for (Address x : patient.getAddress()) {
-				List<String> addressValues = new ArrayList<>();
-				x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
-				addressValues.add(x.getCity());
-				addressValues.add(x.getState());
-				addressValues.add(x.getPostalCode());
-				patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
-			}
+	// 	//check for address if present
+	// 	if(patient.hasAddress())
+	// 		for (Address x : patient.getAddress()) {
+	// 			List<String> addressValues = new ArrayList<>();
+	// 			x.getLine().stream().forEach(line -> addressValues.add(line.toString()));
+	// 			addressValues.add(x.getCity());
+	// 			addressValues.add(x.getState());
+	// 			addressValues.add(x.getPostalCode());
+	// 			patientQuery.where(Patient.ADDRESS.contains().values(addressValues));
+	// 		}
 
-		//check telecom if present
-		if(patient.hasTelecom())
-		{
-			for (ContactPoint x : patient.getTelecom()) {
-				if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-					StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
-					patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
-				} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-					StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
-					patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
-				}
-			}
-		}
+	// 	//check telecom if present
+	// 	if(patient.hasTelecom())
+	// 	{
+	// 		for (ContactPoint x : patient.getTelecom()) {
+	// 			if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+	// 				StringClientParam phoneParam = new StringClientParam(Patient.SP_PHONE);
+	// 				patientQuery.where(phoneParam.matchesExactly().value(x.getValue()));
+	// 			} else if (x.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+	// 				StringClientParam emailParam = new StringClientParam(Patient.SP_EMAIL);
+	// 				patientQuery.where(emailParam.matchesExactly().value(x.getValue()));
+	// 			}
+	// 		}
+	// 	}
 
-		return  patientQuery;
+	// 	return  patientQuery;
 
-	}
+	// }
 
 
 	// private String getProfileAssertion() {
@@ -681,83 +693,83 @@ public class IdentityMatching {
 	// 	return "No profile provided";
 	// }
 
-	private IdentityMatchingScorer gradePatientReference(Patient referencePatient) {
-		IdentityMatchingScorer refScorer = new IdentityMatchingScorer();
+	// private IdentityMatchingScorer gradePatientReference(Patient referencePatient) {
+	// 	IdentityMatchingScorer refScorer = new IdentityMatchingScorer();
 
-		//score identifiers
-		if(referencePatient.hasIdentifier())
-		{
-			for(Identifier id : referencePatient.getIdentifier()) {
-				for(Coding code : id.getType().getCoding()) {
-					switch(code.getCode()) {
-						case("MR"): { refScorer.setMrnMatch(true);  } break;
-						case("DL"): { refScorer.setDriversLicenseMatch(true); } break;
-						case("PPN"): { refScorer.setPassportMatch(true); } break;
-						case("SB"): { refScorer.setSSNMatch(true); } break;
-					}
+	// 	//score identifiers
+	// 	if(referencePatient.hasIdentifier())
+	// 	{
+	// 		for(Identifier id : referencePatient.getIdentifier()) {
+	// 			for(Coding code : id.getType().getCoding()) {
+	// 				switch(code.getCode()) {
+	// 					case("MR"): { refScorer.setMrnMatch(true);  } break;
+	// 					case("DL"): { refScorer.setDriversLicenseMatch(true); } break;
+	// 					case("PPN"): { refScorer.setPassportMatch(true); } break;
+	// 					case("SB"): { refScorer.setSSNMatch(true); } break;
+	// 				}
 
-					//break out of loop if all referenced identifiers are found
-					if(refScorer.getMrnMatch() && refScorer.getDriversLicenseMatch() && refScorer.getPassportMatch() && refScorer.getSSNMatch()) {
-						break;
-					}
-				}
-			}
-		}
+	// 				//break out of loop if all referenced identifiers are found
+	// 				if(refScorer.getMrnMatch() && refScorer.getDriversLicenseMatch() && refScorer.getPassportMatch() && refScorer.getSSNMatch()) {
+	// 					break;
+	// 				}
+	// 			}
+	// 		}
+	// 	}
 
-		//score names
-		if(referencePatient.hasName()) {
-			for(HumanName name : referencePatient.getName()) {
-				if(name.hasGiven()) { refScorer.setGivenNameMatch(true); }
-				if(name.hasFamily()) { refScorer.setFamilyNameMatch(true); }
+	// 	//score names
+	// 	if(referencePatient.hasName()) {
+	// 		for(HumanName name : referencePatient.getName()) {
+	// 			if(name.hasGiven()) { refScorer.setGivenNameMatch(true); }
+	// 			if(name.hasFamily()) { refScorer.setFamilyNameMatch(true); }
 
-				//if given and family name found, break out of for loop
-				if(refScorer.getGivenNameMatch() && refScorer.getFamilyNameMatch()) break;
-			}
-		}
+	// 			//if given and family name found, break out of for loop
+	// 			if(refScorer.getGivenNameMatch() && refScorer.getFamilyNameMatch()) break;
+	// 		}
+	// 	}
 
-		//score gender
-		if(referencePatient.hasGender()) { refScorer.setGenderMatch(true); }
+	// 	//score gender
+	// 	if(referencePatient.hasGender()) { refScorer.setGenderMatch(true); }
 
-		//score birthdate
-		if(referencePatient.hasBirthDate()) { refScorer.setBirthDateMatch(true);	}
+	// 	//score birthdate
+	// 	if(referencePatient.hasBirthDate()) { refScorer.setBirthDateMatch(true);	}
 
-		//score addresses
-		if(referencePatient.hasAddress()) {
-			for(Address refAddress : referencePatient.getAddress()) {
+	// 	//score addresses
+	// 	if(referencePatient.hasAddress()) {
+	// 		for(Address refAddress : referencePatient.getAddress()) {
 
-				//see if address has individual components
-				if(refAddress.hasLine()) {	refScorer.setAddressLineMatch(true); }
-				if(refAddress.hasCity()) { refScorer.setAddressCityMatch(true); }
-				if(refAddress.hasState()) { refScorer.setAddressStateMatch(true);}
-				if(refAddress.hasPostalCode()) { refScorer.setAddressPostalCodeMatch(true);}
+	// 			//see if address has individual components
+	// 			if(refAddress.hasLine()) {	refScorer.setAddressLineMatch(true); }
+	// 			if(refAddress.hasCity()) { refScorer.setAddressCityMatch(true); }
+	// 			if(refAddress.hasState()) { refScorer.setAddressStateMatch(true);}
+	// 			if(refAddress.hasPostalCode()) { refScorer.setAddressPostalCodeMatch(true);}
 
-				//if all address components found, break out of for loop
-				if(refScorer.getAddressLineMatch() && refScorer.getAddressCityMatch() && refScorer.getAddressStateMatch() && refScorer.getAddressPostalCodeMatch()) {
-					break;
-				}
+	// 			//if all address components found, break out of for loop
+	// 			if(refScorer.getAddressLineMatch() && refScorer.getAddressCityMatch() && refScorer.getAddressStateMatch() && refScorer.getAddressPostalCodeMatch()) {
+	// 				break;
+	// 			}
 
-			}
-		}
+	// 		}
+	// 	}
 
-		//score telecom
-		if(referencePatient.hasTelecom()) {
-			for (ContactPoint com : referencePatient.getTelecom()) {
-				if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
-					refScorer.setPhoneNumberMatch(true);
-				}
-				else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
-					refScorer.setEmailMatch(true);
-				}
+	// 	//score telecom
+	// 	if(referencePatient.hasTelecom()) {
+	// 		for (ContactPoint com : referencePatient.getTelecom()) {
+	// 			if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.PHONE.toCode())) {
+	// 				refScorer.setPhoneNumberMatch(true);
+	// 			}
+	// 			else if(com.getSystem().toCode().equals(ContactPoint.ContactPointSystem.EMAIL.toCode())) {
+	// 				refScorer.setEmailMatch(true);
+	// 			}
 
-				//if phone and email  found, break out of for loop
-				if(refScorer.getPhoneNumberMatch() && refScorer.getEmailMatch()) break;
+	// 			//if phone and email  found, break out of for loop
+	// 			if(refScorer.getPhoneNumberMatch() && refScorer.getEmailMatch()) break;
 
-			}
-		}
+	// 		}
+	// 	}
 
-		return refScorer;
+	// 	return refScorer;
 
-	}
+	// }
 
 	// private boolean passesProfileAssertion(IdentityMatchingScorer refScorer) {
 	// 	Integer scoredWeight = refScorer.getMatchWeight();
@@ -816,7 +828,7 @@ public class IdentityMatching {
 		//check for birthdate if present
 		if(refPatient.hasBirthDate())
 		{
-			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(ParamPrefixEnum.EQUAL, refPatient.getBirthDateElement().getValue()));
+			searchMap.add(Patient.BIRTHDATE.getParamName(), new DateParam(ParamPrefixEnum.EQUAL, refPatient.getBirthDateElement().asStringValue()));
 		}
 
 		//check gender if present
@@ -909,13 +921,5 @@ public class IdentityMatching {
 		return entry;
 	}
 
-
-	// private void writeResponse(HttpServletRequest theServletRequest, HttpServletResponse theServletResponse, Resource resource, int reponseStatus) throws IOException {
-	// 	theServletResponse.setStatus(reponseStatus);
-	// 	theServletResponse.setContentType("application/fhir+json");
-
-	// 	FhirContext ctx = FhirContextProvider.getFhirContext();
-	// 	ctx.newJsonParser().encodeResourceToWriter(resource, theServletResponse.getWriter());
-	// }
 
 }
