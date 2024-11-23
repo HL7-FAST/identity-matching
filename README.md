@@ -28,7 +28,7 @@ docker compose up -d
 
 ## `$match` and `$idi-match` Operations
 
-The server contains patient matching operations as described in the IG in the [Patient Matching](https://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html) section.  These are reachable via a POST to the `[host]/fhir/Patient/$match` or `[host]/fhir/Patient/$idi-match` operation endpoints.  The server also supports the `$match` operation on the `Patient` resource.
+The server contains patient matching operations as described in the IG in the [Patient Matching](https://build.fhir.org/ig/HL7/fhir-identity-matching-ig/patient-matching.html) section.  These are reachable via a POST to the `[host]/fhir/Patient/$match` or `[host]/fhir/Patient/$idi-match` operation endpoints.
 
 ### Patient Parameter Validation
 

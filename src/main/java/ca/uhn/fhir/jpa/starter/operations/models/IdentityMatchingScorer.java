@@ -7,13 +7,18 @@ import java.util.stream.Collectors;
 public class IdentityMatchingScorer {
 
 	private boolean _ssnMatch;
+	private boolean _ssnLast4Match;
 	private boolean _mrnMatch;
+	private boolean _digitalIdentifierMatch;
 	private boolean _driversLicenseMatch;
 	private boolean _passportMatch;
-	private boolean _insuranceIdentifierMatch;
+	private boolean _insuranceSubscriberMatch;
+	private boolean _insuranceMemberMatch;
 	private boolean _familyNameMatch;
-	private boolean _givenNameMatch;
-	private boolean _genderMatch;
+	private boolean _firstNameMatch;
+	private boolean _middleNameMatch;
+	private boolean _middleInitialMatch;
+	private boolean _birthSexMatch;
 	private boolean _birthDateMatch;
 	private boolean _phoneNumberMatch;
 	private boolean _emailMatch;
@@ -24,43 +29,8 @@ public class IdentityMatchingScorer {
 	private List<String> matchMessages;
 	private Integer weight;
 
-	public IdentityMatchingScorer() { matchMessages = new ArrayList<>(); }
-
-	public IdentityMatchingScorer(
-		boolean SSNMatch,
-		boolean MrnMatch,
-		boolean DriversLicenseMatch,
-		boolean PassportMatch,
-		boolean InsuranceIdentifierMatch,
-		boolean FamilyNameMatch,
-		boolean GivenNameMatch,
-		boolean GenderMatch,
-		boolean BirthDateMatch,
-		boolean PhoneNumberMatch,
-		boolean EmailMatch,
-		boolean AddressLineMatch,
-		boolean AddressCityMatch,
-		boolean AddressStateMatch,
-		boolean AddressPostalCodeMatch
-	)
-	{
-		_ssnMatch = SSNMatch;
-		_mrnMatch = MrnMatch;
-		_driversLicenseMatch = DriversLicenseMatch;
-		_passportMatch = PassportMatch;
-		_insuranceIdentifierMatch = InsuranceIdentifierMatch;
-		_familyNameMatch = FamilyNameMatch;
-		_givenNameMatch = GivenNameMatch;
-		_genderMatch = GenderMatch;
-		_birthDateMatch = BirthDateMatch;
-		_phoneNumberMatch = PhoneNumberMatch;
-		_emailMatch = EmailMatch;
-		_addressLineMatch = AddressLineMatch;
-		_addressCityMatch = AddressCityMatch;
-		_addressStateMatch = AddressStateMatch;
-		_addressPostalCodeMatch = AddressPostalCodeMatch;
-
-		matchMessages = new ArrayList<>();
+	public IdentityMatchingScorer() { 
+		matchMessages = new ArrayList<>(); 
 		weight = 0;
 	}
 
@@ -68,25 +38,30 @@ public class IdentityMatchingScorer {
 	public double scoreMatch() {
 
 		if(
-			(_mrnMatch) ||
-			(_givenNameMatch && _familyNameMatch && _driversLicenseMatch) ||
-			(_givenNameMatch && _familyNameMatch && _passportMatch) ||
-			(_givenNameMatch && _familyNameMatch && _insuranceIdentifierMatch) ||
-			(_givenNameMatch && _familyNameMatch && _ssnMatch)
+			(_mrnMatch || _digitalIdentifierMatch) ||
+			(_firstNameMatch && _familyNameMatch && _driversLicenseMatch) ||
+			(_firstNameMatch && _familyNameMatch && _passportMatch) ||
+			(_firstNameMatch && _familyNameMatch && _insuranceMemberMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _insuranceSubscriberMatch) ||
+			(_firstNameMatch && _familyNameMatch && _ssnMatch)
 		) { return .99; }
 		else if (
-			//(_givenNameMatch && _familyNameMatch && _insuranceIdentifierMatch) ||
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _addressLineMatch && _addressPostalCodeMatch) ||
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _addressLineMatch && _addressCityMatch && _addressStateMatch) ||
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _emailMatch)
+			(_firstNameMatch && _familyNameMatch && _insuranceSubscriberMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _addressLineMatch && _addressPostalCodeMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _addressLineMatch && _addressCityMatch && _addressStateMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _emailMatch)
 		) { return .80; }
 		else if (
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _phoneNumberMatch) ||
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _genderMatch && _addressPostalCodeMatch)
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _birthSexMatch && _ssnLast4Match) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _birthSexMatch && _phoneNumberMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _birthSexMatch && _addressPostalCodeMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _birthSexMatch && _middleNameMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _phoneNumberMatch)
 		) { return .70; }
 		else if (
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch && _genderMatch) ||
-			(_givenNameMatch && _familyNameMatch && _birthDateMatch)
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _birthSexMatch && _middleInitialMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch && _birthSexMatch) ||
+			(_firstNameMatch && _familyNameMatch && _birthDateMatch)
 		) { return .60; }
 		else {
 			return .10;
@@ -104,10 +79,10 @@ public class IdentityMatchingScorer {
 			getPhoneNumberMatch() ||
 			getEmailMatch() ||
 			getSSNMatch() ||
-			getInsuranceIdentifierMatch() ||
+			getInsuranceSubscriberMatch() ||
 			getMrnMatch()
 		) { weight += 5; }
-		if(getGivenNameMatch() && getFamilyNameMatch()) { weight += 3; }
+		if(getFirstNameMatch() && getFamilyNameMatch()) { weight += 3; }
 		if(getBirthDateMatch()) { weight += 2; }
 
 		return weight;
@@ -125,11 +100,25 @@ public class IdentityMatchingScorer {
 		if(value) { matchMessages.add(SocialSecurityNumberMatchMsg); }
 	}
 
+	public boolean getSSNLast4Match() { return _ssnLast4Match; }
+	public void setSSNLast4Match(boolean value) {
+		final String SocialSecurityNumberLast4MatchMsg = "A matching social security number (last 4 digits) was found.";
+		this._ssnLast4Match = value;
+		if(value) { matchMessages.add(SocialSecurityNumberLast4MatchMsg); }
+	}
+
 	public boolean getMrnMatch() { return _mrnMatch; }
 	public void setMrnMatch(boolean value) {
 		final String MedicalRecordNumberMatchMsg = "A matching medical record number was found.";
 		this._mrnMatch = value;
 		if(value) { matchMessages.add(MedicalRecordNumberMatchMsg); }
+	}
+
+	public boolean getDigitalIdentifierMatch() { return _digitalIdentifierMatch; }
+	public void setDigitalIdentifierMatch(boolean value) {
+		final String DigitalIdentifierMatchMsg = "A matching digital identifier was found.";
+		this._digitalIdentifierMatch = value;
+		if(value) { matchMessages.add(DigitalIdentifierMatchMsg); }
 	}
 
 	public boolean getDriversLicenseMatch() { return _driversLicenseMatch; }
@@ -146,11 +135,18 @@ public class IdentityMatchingScorer {
 		if(value) { matchMessages.add(PassportNumberMatchMsg); }
 	}
 
-	public boolean getInsuranceIdentifierMatch() { return _insuranceIdentifierMatch; }
-	public void setInsuranceIdentifierMatch(boolean value) {
-		final String InsuranceIdentificationMatchMsg = "A matching insurance identification was found.";
-		this._insuranceIdentifierMatch = value;
-		if(value) { matchMessages.add(InsuranceIdentificationMatchMsg); }
+	public boolean getInsuranceSubscriberMatch() { return _insuranceSubscriberMatch; }
+	public void setInsuranceSubscriberMatch(boolean value) {
+		final String InsuranceSubscriberMatchMsg = "A matching insurance subscriber was found.";
+		this._insuranceSubscriberMatch = value;
+		if(value) { matchMessages.add(InsuranceSubscriberMatchMsg); }
+	}
+
+	public boolean getInsuranceMemberMatch() { return _insuranceMemberMatch; }
+	public void setInsuranceMemberMatch(boolean value) {
+		final String InsuranceMemberMatchMsg = "A matching insurance member was found.";
+		this._insuranceMemberMatch = value;
+		if(value) { matchMessages.add(InsuranceMemberMatchMsg); }
 	}
 
 	public boolean getFamilyNameMatch() { return _familyNameMatch; }
@@ -160,18 +156,32 @@ public class IdentityMatchingScorer {
 		if(value) { matchMessages.add(FamilyNameMatchMsg); }
 	}
 
-	public boolean getGivenNameMatch() { return _givenNameMatch; }
-	public void setGivenNameMatch(boolean value) {
-		final String GivenNameMatchMsg = "A matching first name was found.";
-		this._givenNameMatch = value;
-		if(value) { matchMessages.add(GivenNameMatchMsg); }
+	public boolean getFirstNameMatch() { return _firstNameMatch; }
+	public void setFirstNameMatch(boolean value) {
+		final String FirstNameMatchMsg = "A matching first name was found.";
+		this._firstNameMatch = value;
+		if(value) { matchMessages.add(FirstNameMatchMsg); }
 	}
 
-	public boolean getGenderMatch() { return _genderMatch; }
-	public void setGenderMatch(boolean value) {
-		final String GenderMatchMsg = "A matching gender was found.";
-		this._genderMatch = value;
-		if(value) { matchMessages.add(GenderMatchMsg); }
+	public boolean getMiddleNameMatch() { return _middleNameMatch; }
+	public void setMiddleNameMatch(boolean value) {
+		final String MiddleNameMatchMsg = "A matching middle name was found.";
+		this._middleNameMatch = value;
+		if(value) { matchMessages.add(MiddleNameMatchMsg); }
+	}
+
+	public boolean getMiddleInitialMatch() { return _middleInitialMatch; }
+	public void setMiddleInitialMatch(boolean value) {
+		final String MiddleInitialMatchMsg = "A matching middle initial was found.";
+		this._middleInitialMatch = value;
+		if(value) { matchMessages.add(MiddleInitialMatchMsg); }
+	}
+
+	public boolean getBirthSexMatch() { return _birthSexMatch; }
+	public void setBirthSexMatch(boolean value) {
+		final String BirthSexMatchMsg = "A matching birth sex was found.";
+		this._birthSexMatch = value;
+		if(value) { matchMessages.add(BirthSexMatchMsg); }
 	}
 
 	public boolean getBirthDateMatch() { return _birthDateMatch; }

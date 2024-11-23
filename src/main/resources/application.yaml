@@ -3,6 +3,8 @@ server:
   #  servlet:
   #    context-path: /example/path
   port: 8080
+  tomcat:
+    relaxed-query-chars: '|'
 #Adds the option to go to eg. http://localhost:8080/actuator/health for seeing the running configuration
 #see https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints
 management:
@@ -33,7 +35,7 @@ management:
       export:
         enabled: true
 security:
-  enable-authentication: true
+  enable-authentication: false
   introspection-url:
   client-id:
   client-secret:
@@ -96,7 +98,8 @@ spring:
 hapi:
   fhir:
     initialdata:
-      - examples
+      - ig-examples
+      - sample-data
     match-validation-header: X-Match-Validation
     match-validation-level: DEFAULT
     
@@ -217,7 +220,7 @@ hapi:
     #    delete_expunge_enabled: true
     #    enable_repository_validating_interceptor: true
     #    enable_index_missing_fields: false
-    #    enable_index_of_type: true
+    enable_index_of_type: true
     #    enable_index_contained_resource: false
     #    upliftedRefchains_enabled: true
     #    resource_dbhistory_enabled: false

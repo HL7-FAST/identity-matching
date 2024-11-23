@@ -1,0 +1,617 @@
+[
+  {
+    "id": "dicom-uid",
+    "name": "DICOM Unique Id",
+    "uri": "urn:dicom:uid"
+  },
+  {
+    "id": "us-ssn",
+    "name": "United States Social Security Number",
+    "uri": "http://hl7.org/fhir/sid/us-ssn",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "SB"
+      }
+    ]
+  },
+  {
+    "id": "us-medicare",
+    "name": "United States Medicare Number",
+    "uri": "http://hl7.org/fhir/sid/us-medicare",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "SB"
+      }
+    ]
+  },
+  {
+    "id": "us-mbi",
+    "name": "Medicare Beneficiary Identifier (United States)",
+    "uri": "http://hl7.org/fhir/sid/us-mbi",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "SB"
+      }
+    ]
+  },
+  {
+    "id": "us-npi",
+    "name": "United States National Provider Identifier",
+    "uri": "http://hl7.org/fhir/sid/us-npi",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "PRN"
+      }
+    ]
+  },
+  {
+    "id": "gtin",
+    "name": "Global Trade Item Number (GTIN)",
+    "uri": "https://www.gs1.org/gtin"
+  },
+  {
+    "id": "4.3.2",
+    "name": "Alaska Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.2",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.1",
+    "name": "Alabama Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.1",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.5",
+    "name": "Arkansas Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.5",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.4",
+    "name": "Arizona Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.4",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.6",
+    "name": "California Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.6",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.8",
+    "name": "Colorado Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.8",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.9",
+    "name": "Connecticut Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.9",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.11",
+    "name": "DC Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.11",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.10",
+    "name": "Delaware Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.10",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.12",
+    "name": "Florida Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.12",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.13",
+    "name": "Georgia Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.13",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.15",
+    "name": "Hawaii Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.15",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.18",
+    "name": "Indiana Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.18",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.19",
+    "name": "Iowa Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.19",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.16",
+    "name": "Idaho Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.16",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.17",
+    "name": "Illinois Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.17",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.20",
+    "name": "Kansas Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.20",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.21",
+    "name": "Kentucky Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.21",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.22",
+    "name": "Louisiana Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.22",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.25",
+    "name": "Massachusetts Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.25",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.24",
+    "name": "Maryland Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.24",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.23",
+    "name": "Maine Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.23",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.26",
+    "name": "Michigan Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.26",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.27",
+    "name": "Minnesota Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.27",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.29",
+    "name": "Missouri Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.29",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.28",
+    "name": "Mississippi Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.28",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.30",
+    "name": "Montana Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.30",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.36",
+    "name": "New York Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.36",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.37",
+    "name": "North Carolina Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.37",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.38",
+    "name": "North Dakota Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.38",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.31",
+    "name": "Nebraska Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.31",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.33",
+    "name": "New Hampshire Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.33",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.34",
+    "name": "New Jersey Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.34",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.35",
+    "name": "New Mexico Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.35",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.32",
+    "name": "Nevada Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.32",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.39",
+    "name": "Ohio Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.39",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.40",
+    "name": "Oklahoma Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.40",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.41",
+    "name": "Oregon Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.41",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.42",
+    "name": "Pennsylvania Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.42",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.44",
+    "name": "Rhode Island Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.44",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.45",
+    "name": "South Carolina Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.45",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.46",
+    "name": "South Dakota Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.46",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.47",
+    "name": "Tennessee Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.47",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.48",
+    "name": "Texas Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.48",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.49",
+    "name": "Utah Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.49",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.51",
+    "name": "Virginia Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.51",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.50",
+    "name": "Vermont Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.50",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.53",
+    "name": "Washington Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.53",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.55",
+    "name": "Wisconsin Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.55",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.54",
+    "name": "West Virginia Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.54",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  },
+  {
+    "id": "4.3.56",
+    "name": "Wyoming Driver's License",
+    "uri": "urn:oid:2.16.840.1.113883.4.3.56",
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "DL"
+      }
+    ]
+  }
+]
