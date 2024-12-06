@@ -37,6 +37,7 @@ public class IdentityMatching {
 	private final String IDI_Patient_L0_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L0";
 	private final String IDI_Patient_L1_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L1";
 
+	private final String IDI_Patient_Name_FhirPath = "name.family.exists() and name.given.exists()";
 	private final String IDI_Patient_FhirPath = "identifier.exists() or telecom.exists() or (name.family.exists() and name.given.exists()) or (address.line.exists() and address.city.exists()) or birthDate.exists()";
 	private final String IDI_Patient_L0_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 9";
 	private final String IDI_Patient_L1_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 10";
@@ -511,35 +512,42 @@ public class IdentityMatching {
 		// default validation level starts here
 		// validate the resource against the most restrictive profile declared or the base IDI-Patient profile
 
-		// ValidationResult result = validator.validateWithResult(patient);
-		IFhirPath fhirPath = FhirContextProvider.getFhirContext().newFhirPath(); //.evaluateFirst(patient, IDI_Patient_FhirPath, BooleanType.class);
+		IFhirPath fhirPath = FhirContextProvider.getFhirContext().newFhirPath();
 
 		String message = null;
 
-		
-
-		// IDI-Patient L1 profile validation
-		if (assertIDIPatientL1Profile) {
-			var result = fhirPath.evaluateFirst(patient, IDI_Patient_L1_FhirPath, BooleanType.class);
-			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
-				message = "The Patient resource does not meet the requirements of the IDI-Patient-L1 profile.";
-			}
+		// Name validation is required for all profiles
+		var nameResult = fhirPath.evaluateFirst(patient, IDI_Patient_Name_FhirPath, BooleanType.class);
+		if (nameResult == null || !nameResult.isPresent() || !nameResult.get().booleanValue()) {
+			message = "Either the given or family name SHALL be present.";
 		}
 
-		// IDI-Patient L0 profile validation
-		else if (assertIDIPatientL0Profile) {
-			var result = fhirPath.evaluateFirst(patient, IDI_Patient_L0_FhirPath, BooleanType.class);
-			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
-				message = "The Patient resource does not meet the requirements of the IDI-Patient-L0 profile.";
-			}
-		}
+		if (message == null) {
 
-		// base IDI-Patient profile validation
-		else {
-			var result = fhirPath.evaluateFirst(patient, IDI_Patient_FhirPath, BooleanType.class);
-			if (result == null || !result.isPresent() || !result.get().booleanValue()) {
-				message = "The Patient resource does not meet the requirements of the IDI-Patient profile.";
+			// IDI-Patient L1 profile validation
+			if (assertIDIPatientL1Profile) {
+				var result = fhirPath.evaluateFirst(patient, IDI_Patient_L1_FhirPath, BooleanType.class);
+				if (result == null || !result.isPresent() || !result.get().booleanValue()) {
+					message = "The Patient resource does not meet the requirements of the IDI-Patient-L1 profile.";
+				}
 			}
+
+			// IDI-Patient L0 profile validation
+			else if (assertIDIPatientL0Profile) {
+				var result = fhirPath.evaluateFirst(patient, IDI_Patient_L0_FhirPath, BooleanType.class);
+				if (result == null || !result.isPresent() || !result.get().booleanValue()) {
+					message = "The Patient resource does not meet the requirements of the IDI-Patient-L0 profile.";
+				}
+			}
+
+			// base IDI-Patient profile validation
+			else {
+				var result = fhirPath.evaluateFirst(patient, IDI_Patient_FhirPath, BooleanType.class);
+				if (result == null || !result.isPresent() || !result.get().booleanValue()) {
+					message = "The Patient resource does not meet the requirements of the IDI-Patient profile.";
+				}
+			}
+
 		}
 
 
