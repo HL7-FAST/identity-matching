@@ -18,6 +18,8 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.param.*;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
+
+import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
@@ -37,7 +39,7 @@ public class IdentityMatching {
 	private final String IDI_Patient_L0_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L0";
 	private final String IDI_Patient_L1_Profile = "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient-L1";
 
-	private final String IDI_Patient_Name_FhirPath = "name.family.exists() and name.given.exists()";
+	private final String IDI_Patient_Name_FhirPath = "name.family.exists() or name.given.exists()";
 	private final String IDI_Patient_FhirPath = "identifier.exists() or telecom.exists() or (name.family.exists() and name.given.exists()) or (address.line.exists() and address.city.exists()) or birthDate.exists()";
 	private final String IDI_Patient_L0_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 9";
 	private final String IDI_Patient_L1_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 10";
@@ -115,7 +117,13 @@ public class IdentityMatching {
 		if (output.getResourceType() == ResourceType.Bundle) {
 			Bundle bundle = (Bundle)output;
 			bundle.setType(Bundle.BundleType.SEARCHSET);
-			bundle.setTotal(bundle.getEntry().size());
+
+			// self link because this is a searchset and will produce a validation warning otherwise
+			String matchUrl = StringUtils.removeEnd(appProperties.getServer_address(), "/") + "/Patient/$match";
+			bundle.addLink(new Bundle.BundleLinkComponent().setRelation("self").setUrl(matchUrl));
+
+			// set total for the searchset to the number of Patient entries
+			bundle.setTotal((int)bundle.getEntry().stream().filter(x -> x.getResource() instanceof Patient).count());
 		}
 
 		return output;
@@ -437,10 +445,10 @@ public class IdentityMatching {
 		if (outputBundle.getEntry().isEmpty()) {
 			String message = "No matches found.";
 			OperationOutcome outcome = new OperationOutcome();
-			outcome.addIssue().setCode(OperationOutcome.IssueType.NOTFOUND).setSeverity(OperationOutcome.IssueSeverity.INFORMATION)
+			outcome.addIssue().setCode(OperationOutcome.IssueType.NOTFOUND).setSeverity(OperationOutcome.IssueSeverity.WARNING)
 				.setDiagnostics(message);
 
-			return outcome;
+			outputBundle.addEntry().setResource(outcome);
 		}
 
 
