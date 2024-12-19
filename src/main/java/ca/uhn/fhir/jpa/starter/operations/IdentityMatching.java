@@ -436,7 +436,7 @@ public class IdentityMatching {
 			//create bundle search component element
 			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
 			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
-			// searchComp.setScore(scorer.scoreMatch());
+			searchComp.setScore(scorer.scoreMatch());
 			// for(String msg : scorer.getMatchMessages()) {
 			// 	System.out.println(msg);
 			// }
