@@ -2,8 +2,6 @@
     "resourceType": "Patient",
     "id": "PatientFullDemographics",
     "meta": {
-        "versionId": "1",
-        "lastUpdated": "2024-04-11T14:41:08.548+00:00",
         "profile": [
             "http://hl7.org/fhir/us/identity-matching/StructureDefinition/IDI-Patient"
         ]
@@ -74,7 +72,7 @@
                 ]
             },
             "system": "http://hl7.org/fhir/sid/us-ssn",
-            "value": "390-16-5329"
+            "value": "390165329"
         },
         {
             "type": {
@@ -89,14 +87,60 @@
             "value": "3902-16532901"
         }
     ],
+    "active": true,
     "name": [
         {
             "family": "Patient",
             "given": [
                 "Max",
                 "Demographics"
-            ]
+            ],
+            "use": "usual"
         }
     ],
-    "birthDate": "1992-05-17"
+    "telecom": [
+        {
+            "system": "phone",
+            "value": "726-555-2900",
+            "use": "mobile"
+        },
+        {
+            "system": "email",
+            "value": "max@patient.me",
+            "use": "home"
+        }
+    ],
+    "gender": "male",
+    "birthDate": "1992-05-17",
+    "address": [
+        {
+            "type": "physical",
+            "line": [
+                "418 Teapot Lane",
+                "Unit 2"
+            ],
+            "city": "Raleigh",
+            "state": "NC",
+            "postalCode": "27513-1234"
+        }
+    ],
+    "maritalStatus": {
+        "coding": [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-NullFlavor",
+                "code": "UNK"
+            }
+        ]
+    },
+    "contact": [
+        {
+            "telecom": [
+                {
+                    "system": "fax",
+                    "value": "726-555-1094",
+                    "use": "home"
+                }
+            ]
+        }
+    ]
 }

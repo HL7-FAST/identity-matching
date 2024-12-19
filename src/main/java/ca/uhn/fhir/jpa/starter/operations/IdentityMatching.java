@@ -45,8 +45,10 @@ public class IdentityMatching {
 	private final String IDI_Patient_L1_FhirPath = "((identifier.type.coding.exists(code = 'PPN' or code = 'DL' or code = 'STID') or identifier.exists(system='http://hl7.org/fhir/us/identity-matching/ns/HL7Identifier')) and identifier.value.exists()).toInteger()*10 + iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) =1,4,iif(((address.exists(use = 'home') and address.line.exists() and (address.postalCode.exists() or (address.state.exists() and address.city.exists()))).toInteger() + (identifier.type.coding.exists(code != 'PPN' and code != 'DL' and code != 'STID') and identifier.value.exists()).toInteger() + (telecom.exists(system = 'email') and telecom.value.exists()).toInteger() + (telecom.exists(system = 'phone') and telecom.value.exists()).toInteger() + (photo.exists()).toInteger()) >1,5,0)) + (name.family.exists() and name.given.exists()).toInteger()*3 + (birthDate.exists().toInteger()*2) >= 10";
 
 	private final String BIRTH_SEX_EXTENSION = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex";
-	private final String HL7_IDENTIFIER_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0203";
-	private final String IDENTITY_IDENTIFIER_SYSTEM = "http://hl7.org/fhir/us/identity-matching/CodeSystem/Identity-Identifier-cs";
+	private final String IDENTIFIER_SSN_SYSTEM = "http://hl7.org/fhir/sid/us-ssn";
+	private final String IDENTITY_IDENTIFIER_SSN4_SYSTEM = "http://hl7.org/fhir/us/identity-matching/CodeSystem/Identity-Identifier-cs";
+	private final String IDENTITY_IDENTIFIER_SSN4_CODE = "SSN4";
+	private final String IDENTITY_IDENTIFIER_SSN4_PARAMETER = "ssn4";
 
 
 	private AppProperties appProperties;
@@ -284,17 +286,24 @@ public class IdentityMatching {
 					identifiers.stream().forEach(x -> {
 						// System.out.println("x: " + (x.hasType() ? x.getType().getCoding().stream().findFirst().get().getSystem() : "") + " -- " + x.getSystem() + " " + x.getValue());
 
+						if (!x.hasValue()) {
+							return;
+						}
+						
+						// primary check for a full identifier match
 						if (
 							// identifier value must match
 							x.getValue().equals(id.getIdentifierValue())
 
+							// ... and
 							&& (
 								// identifier type system + code need to match...
 								(x.hasType() && x.getType().hasCoding() && x.getType().getCoding().stream().anyMatch(
-									coding -> coding.getSystem().equals(id.getIdentifierTypeSystem()) && coding.getCode().equals(id.getIdentifierTypeCode())
+									coding -> coding.hasSystem() && coding.getSystem().equals(id.getIdentifierTypeSystem()) 
+														&& coding.hasCode() && coding.getCode().equals(id.getIdentifierTypeCode())
 								))
 								// ...or identifier system has to match (if no type exists)
-								|| x.getSystem().equals(id.getIdentifierSystem())
+								|| (x.hasSystem() && x.getSystem().equals(id.getIdentifierSystem()))
 							)						
 							
 						) {
@@ -312,10 +321,23 @@ public class IdentityMatching {
 								case("DL"): { scorer.setDriversLicenseMatch(true); } break;
 								case("PPN"): { scorer.setPassportMatch(true); } break;
 								case("SB"): { scorer.setSSNMatch(true); } break;
+								case("SSN4"): { scorer.setSSNLast4Match(true); } break;
 							}
 							
 						}
 
+
+						// Additional SSN4 match case:
+						// Patient may be matched based on the custom SSN4 search parameter but patient resource has a full SSN (http://terminology.hl7.org/CodeSystem/v2-0203|SB type)
+						// But, the search was only for last four digits, so we cannot weigh it as a full SSN match
+						else if (
+							id.hasIdentifierSystem() && id.hasIdentifierTypeCode()
+							&& id.getIdentifierTypeSystem().equals(IDENTITY_IDENTIFIER_SSN4_SYSTEM) && id.getIdentifierTypeCode().equals(IDENTITY_IDENTIFIER_SSN4_CODE)
+							&& x.getSystem().equals(IDENTIFIER_SSN_SYSTEM) 
+							&& x.getValue().substring(Math.max(x.getValue().length() - 4, 0)).equals(id.getIdentifierValue())
+						) {
+							scorer.setSSNLast4Match(true);
+						}
 					});
 				}
 			}
@@ -414,7 +436,7 @@ public class IdentityMatching {
 			//create bundle search component element
 			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
 			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
-			searchComp.setScore(scorer.scoreMatch());
+			// searchComp.setScore(scorer.scoreMatch());
 			// for(String msg : scorer.getMatchMessages()) {
 			// 	System.out.println(msg);
 			// }
@@ -877,13 +899,25 @@ public class IdentityMatching {
 					continue;
 				}
 
+				// custom search parameter for SSN4 matching
+				// if (coding.getSystem().equals(IDENTITY_IDENTIFIER_SYSTEM) && coding.getCode().equals(IDENTITY_IDENTIFIER_SSN4_CODE)) {
+				if (
+					identifier.getType().getCoding().stream().anyMatch(
+						coding -> coding.getSystem().equals(IDENTITY_IDENTIFIER_SSN4_SYSTEM) && coding.getCode().equals(IDENTITY_IDENTIFIER_SSN4_CODE)
+					)
+				) {
+					searchMap.add(IDENTITY_IDENTIFIER_SSN4_PARAMETER, new TokenParam().setValue(identifier.getValue()));
+					continue;
+				}
+
+
 				// search params for identifier type if present (":of-type" modifier)
 				if (identifier.hasType() && identifier.getType().hasCoding()) {
 					for (Coding coding : identifier.getType().getCoding()) {
 						if (coding.hasSystem() && coding.hasCode()) {
 							identifierParam.addAnd(new TokenParam()
 								.setSystem(coding.getSystem())
-								.setValue(coding.getCode() + "|" + identifier.getValue())
+								.setValue(coding.getCode() + "|*" + identifier.getValue())
 								.setModifier(TokenParamModifier.OF_TYPE));
 						}
 					}

@@ -1,0 +1,13 @@
+{
+  "resourceType": "SearchParameter",
+  "id": "patient-ssn4",
+  "url": "http://hl7.org/fhir/us/identity-matching/SearchParameter/patient-ssn4",
+  "name": "PatientSSN4SearchParameter",
+  "status": "active",
+  "experimental": true,
+  "description": "Search by last four digits of a patient's social security number",
+  "code": "ssn4",
+  "base": ["Patient"],
+  "type": "token",
+  "expression": "Patient.identifier.where(system='http://hl7.org/fhir/sid/us-ssn' and value.length()>3).select(value.substring(length()-4))"
+}
