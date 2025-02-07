@@ -21,10 +21,13 @@ import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourcePatternUtils;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -50,6 +53,7 @@ public class IdentityMatching {
 	private final String IDENTITY_IDENTIFIER_SSN4_CODE = "SSN4";
 	private final String IDENTITY_IDENTIFIER_SSN4_PARAMETER = "ssn4";
 
+	private final static Logger logger = LoggerFactory.getLogger(IdentityMatching.class);
 
 	private AppProperties appProperties;
 	private String serverAddress;
@@ -195,7 +199,7 @@ public class IdentityMatching {
 			Organization exampleOrg = ctx.newJsonParser().parseResource(Organization.class, resourceText);
 
 			if (exampleOrg != null) {
-				bundle.getEntry().add(0, createBundleEntry(exampleOrg));
+				bundle.getEntry().add(0, createBundleEntry(exampleOrg, this.serverAddress));
 			}		
 			else {
 				String message = "Organization-OrgExample.json file not found.";
@@ -229,8 +233,8 @@ public class IdentityMatching {
 		// assertIDIPatientL0Profile = false;
 		// assertIDIPatientL1Profile = false;
 
-		FhirContext ctx = FhirContextProvider.getFhirContext();
-		IGenericClient client = ctx.newRestfulGenericClient(serverAddress);
+		// FhirContext ctx = FhirContextProvider.getFhirContext();
+		// IGenericClient client = ctx.newRestfulGenericClient(serverAddress);
 
 		Patient patient = params.getPatient();
 		BooleanType onlyCertainMatches = params.getOnlyCertainMatches();
@@ -438,9 +442,9 @@ public class IdentityMatching {
 			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
 			searchComp.setScore(scorer.scoreMatch());
 			// for(String msg : scorer.getMatchMessages()) {
-			// 	System.out.println(msg);
+			// 	logger.info(msg);
 			// }
-			// System.out.println("Match score: " + scorer.scoreMatch());
+			logger.info("Match score: " + scorer.scoreMatch());
 
 			//Add extension to place match messages
 			// Extension extExplanation = new Extension();
@@ -1026,23 +1030,58 @@ public class IdentityMatching {
 		}
 
 
-		// System.out.println("Search Map: " + searchMap.toNormalizedQueryString(FhirContextProvider.getFhirContext()));
+		logger.info("Search Map: " + searchMap.toNormalizedQueryString(FhirContextProvider.getFhirContext()));
 		IBundleProvider patientResults = patientDao.search(searchMap, theRequestDetails);
 
 		patientResults.getResources(0, patientResults.size())
 			.stream().map(Patient.class::cast)
-			.forEach(o -> patientBundle.addEntry(this.createBundleEntry(o)));
+			.forEach(o -> patientBundle.addEntry(this.createBundleEntry(o, this.serverAddress)));
+
+		// search remote servers if enabled
+		String remoteServerHeader = theRequestDetails.getHeader(appProperties.getRemoteMatchHeader());
+		if (remoteServerHeader != null) {
+			List<String> remoteServers = new ArrayList<String>();
+
+			if (remoteServerHeader.isBlank()) {
+				remoteServers = appProperties.getRemoteServers();
+			} else {
+				remoteServers = Arrays.asList(remoteServerHeader.split(","));
+			}
+
+			if (remoteServers != null && !remoteServers.isEmpty()) {
+				logger.info("Querying remote servers: " + remoteServers.stream().collect(Collectors.joining(", ")));
+				for (String remoteServer : remoteServers) {
+					try {
+						IGenericClient remoteClient = FhirContextProvider.getFhirContext().newRestfulGenericClient(remoteServer);
+						Bundle remoteResults = remoteClient.search()
+							.byUrl("Patient" + searchMap.toNormalizedQueryString(FhirContextProvider.getFhirContext()))
+							.returnBundle(Bundle.class)
+							.execute();
+
+						logger.info("Remote results: " + remoteResults.getTotal() + " from " + remoteServer);
+						remoteResults.getEntry().forEach(e -> {
+							if (e.hasResource() && e.getResource() instanceof Patient) {
+								patientBundle.addEntry(this.createBundleEntry((Patient) e.getResource(), remoteServer));
+							}
+						});
+					} catch (Exception ex) {
+						logger.error("Error searching remote server: " + remoteServer + " -- " + ex.getMessage());
+					}
+
+				}
+			}
+		}
 
 		return patientBundle;
 
 	}
 
-	private Bundle.BundleEntryComponent createBundleEntry(DomainResource resource) {
+	private Bundle.BundleEntryComponent createBundleEntry(DomainResource resource, String serverBaseUrl) {
 		Bundle.BundleEntryComponent entry = new Bundle.BundleEntryComponent();
 		entry.setResource(resource);
-		if (this.serverAddress != null && !this.serverAddress.isEmpty()) {
+		if (serverBaseUrl != null && !serverBaseUrl.isEmpty()) {
 			try {
-				String fullUrl = this.serverAddress;
+				String fullUrl = serverBaseUrl;
 				fullUrl += (!fullUrl.endsWith("/") ? "/" : "") + resource.fhirType() + "/" + resource.getIdPart();
 				entry.setFullUrl(fullUrl);
 			} catch (Exception ex) { }

@@ -103,6 +103,11 @@ hapi:
       - sample-data
     match-validation-header: X-Match-Validation
     match-validation-level: DEFAULT
+    remote-match-header: X-Remote-Match
+    remote-servers:
+      # - http://localhost:5826/fhir/r4
+      # - https://hapi.fhir.org/baseR4
+
     
     ### This flag when enabled to true, will avail evaluate measure operations from CR Module.
     ### Flag is false by default, can be passed as command line argument to override.

@@ -983,4 +983,10 @@ public Cors getCors() {
   @Getter @Setter
   private IdentityMatchValidationLevel matchValidationLevel = IdentityMatchValidationLevel.DEFAULT;
 
+  @Getter @Setter
+  private String remoteMatchHeader = "X-Remote-Match";
+
+  @Getter @Setter
+  private List<String> remoteServers = new ArrayList<>();
+
 }

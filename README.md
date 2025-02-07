@@ -60,6 +60,21 @@ A valid certificate is also required.  This can be set via the `security.cert-fi
 
 Security can also be disabled by supplying a header in the request.  The name of this header is configured in the `security.bypass-header` property and defaults to `X-Allow-Public-Access`.  No value is required for this header.
 
+## Remote Server Matching
+
+> [!WARNING]
+> This feature is experimental.
+
+The server supports the ability to perform a match operation against remote FHIR servers.  This is enabled by supplying a special header in the `POST` to the match operation (`$match` or `$idi-match`).
+
+The name of this header is configured in the `hapi.fhir.remote-match-header` property and defaults to `X-Remote-Match`.  The behavior of this header is as follows:
+
+| Value | cURL Header Example | Behavior |
+| --- | --- | -- |
+| Blank | `-H 'X-Remote-Match'` | The server will perform a match operation against the remote server(s) specified in the `hapi.fhir.remote-servers` property. This property should be set to a list of base FHIR endpoints. |
+| Comma-separated list | `-H 'X-Remote-Match: http://localhost:8081/fhir,https://hapi.fhir.org/baseR4'` | The server will perform a match operation against each of the remote servers in the list. |
+| No header | | No remote matching will be performed even if the `hapi.fhir.remote-servers` property is set. |
+
 
 
 ## Questions and Contributions
