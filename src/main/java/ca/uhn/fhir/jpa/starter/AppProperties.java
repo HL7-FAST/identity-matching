@@ -989,4 +989,7 @@ public Cors getCors() {
   @Getter @Setter
   private List<String> remoteServers = new ArrayList<>();
 
+  @Getter @Setter
+  private Integer remoteLimit = 3;
+
 }

@@ -71,7 +71,7 @@ The name of this header is configured in the `hapi.fhir.remote-match-header` pro
 
 | Value | cURL Header Example | Behavior |
 | --- | --- | -- |
-| Blank | `-H 'X-Remote-Match'` | The server will perform a match operation against the remote server(s) specified in the `hapi.fhir.remote-servers` property. This property should be set to a list of base FHIR endpoints. |
+| Blank | `-H 'X-Remote-Match;'` | The server will perform a match operation against the remote server(s) specified in the `hapi.fhir.remote-servers` property. This property should be set to a list of base FHIR endpoints. |
 | Comma-separated list | `-H 'X-Remote-Match: http://localhost:8081/fhir,https://hapi.fhir.org/baseR4'` | The server will perform a match operation against each of the remote servers in the list. |
 | No header | | No remote matching will be performed even if the `hapi.fhir.remote-servers` property is set. |
 

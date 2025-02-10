@@ -1049,6 +1049,10 @@ public class IdentityMatching {
 			}
 
 			if (remoteServers != null && !remoteServers.isEmpty()) {
+
+				if (remoteServers.size() > appProperties.getRemoteLimit()) {
+					remoteServers = remoteServers.subList(0, appProperties.getRemoteLimit());
+				}
 				logger.info("Querying remote servers: " + remoteServers.stream().collect(Collectors.joining(", ")));
 				for (String remoteServer : remoteServers) {
 					try {

@@ -107,6 +107,7 @@ hapi:
     remote-servers:
       # - http://localhost:5826/fhir/r4
       # - https://hapi.fhir.org/baseR4
+    remote-limit: 3
 
     
     ### This flag when enabled to true, will avail evaluate measure operations from CR Module.
