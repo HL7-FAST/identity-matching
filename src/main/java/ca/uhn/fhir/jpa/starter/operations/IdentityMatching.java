@@ -921,7 +921,7 @@ public class IdentityMatching {
 						if (coding.hasSystem() && coding.hasCode()) {
 							identifierParam.addAnd(new TokenParam()
 								.setSystem(coding.getSystem())
-								.setValue(coding.getCode() + "|*" + identifier.getValue())
+								.setValue(coding.getCode() + "|" + identifier.getValue())
 								.setModifier(TokenParamModifier.OF_TYPE));
 						}
 					}
