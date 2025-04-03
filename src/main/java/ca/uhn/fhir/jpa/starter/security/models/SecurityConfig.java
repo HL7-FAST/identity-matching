@@ -42,6 +42,12 @@ public class SecurityConfig {
 	@Getter @Setter
 	String bypassHeader = "X-Allow-Public-Access";
 
+	@Getter @Setter
+	Boolean sslVerify = true;
+
+	@Getter @Setter
+	Boolean resolveIssuer = true;
+
 	public List<String> getProtectedEndpoints() {
 		if(this.protectedEndpoints.size() > 0) {
 			return List.of(this.protectedEndpoints.get(0).split("[;]"));

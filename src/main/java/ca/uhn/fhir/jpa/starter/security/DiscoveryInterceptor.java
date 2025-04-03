@@ -3,6 +3,7 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.jpa.starter.AppProperties;
+import ca.uhn.fhir.jpa.starter.custom.SecurityUtil;
 import ca.uhn.fhir.jpa.starter.operations.models.DiscoveryObject;
 import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
 
@@ -72,7 +73,7 @@ public class DiscoveryInterceptor
 
 
 			String fhirBase = StringUtils.removeEnd(appProperties.getServer_address(), "/");
-			String issuer = StringUtils.removeEnd(securityConfig.getIssuer(), "/");
+			String issuer = SecurityUtil.resolveIssuer(securityConfig);
 
 			myJsonObject.setAuthorization_endpoint(issuer + "/connect/authorize");
 			myJsonObject.setToken_endpoint(issuer + "/connect/token");

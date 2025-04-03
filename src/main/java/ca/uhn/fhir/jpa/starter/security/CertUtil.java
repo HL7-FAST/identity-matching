@@ -11,7 +11,6 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -31,6 +30,7 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import ca.uhn.fhir.jpa.starter.AppProperties;
+import ca.uhn.fhir.jpa.starter.custom.SecurityUtil;
 import ca.uhn.fhir.jpa.starter.security.models.CertGenerateRequest;
 import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
 
@@ -121,7 +121,7 @@ public class CertUtil {
 
       // retrieve a cert from the /api/cert/generate endpoint
       String certUrl = StringUtils.removeEnd(securityConfig.getIssuer(), "/") + "/api/cert/generate";
-      HttpClient client = HttpClient.newBuilder().build();
+      HttpClient client = SecurityUtil.getHttpClient(securityConfig);
 
       HttpRequest request = HttpRequest.newBuilder()
 							.uri(URI.create(certUrl))

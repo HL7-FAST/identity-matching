@@ -50,6 +50,8 @@ security:
   # cert-password: udap-test
   fetch-cert: true
   bypass-header: X-Allow-Public-Access
+  ssl-verify: true
+  resolve-issuer: true
 spring:
   main:
     allow-circular-references: true

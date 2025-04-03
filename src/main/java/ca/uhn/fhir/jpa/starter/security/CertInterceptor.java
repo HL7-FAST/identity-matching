@@ -29,6 +29,7 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.jpa.starter.AppProperties;
+import ca.uhn.fhir.jpa.starter.custom.SecurityUtil;
 import ca.uhn.fhir.jpa.starter.operations.models.ClientAssertionRequest;
 import ca.uhn.fhir.jpa.starter.operations.models.ClientAssertionResponse;
 import ca.uhn.fhir.jpa.starter.operations.models.SoftwareStatementRequest;
@@ -74,7 +75,7 @@ public class CertInterceptor {
       }
 
       String fhirBase = StringUtils.removeEnd(appProperties.getServer_address(), "/");
-      String issuer = StringUtils.removeEnd(securityConfig.getIssuer(), "/");
+      String issuer = SecurityUtil.resolveIssuer(securityConfig);
       X509Certificate certificate = CertUtil.getCert(securityConfig);
       Algorithm algorithm = CertUtil.getAlgorithm(securityConfig);
       Instant now = Instant.now();
@@ -135,7 +136,7 @@ public class CertInterceptor {
         return false;
       }
 
-      String issuer = StringUtils.removeEnd(securityConfig.getIssuer(), "/");
+      String issuer = SecurityUtil.resolveIssuer(securityConfig);
       X509Certificate certificate = CertUtil.getCert(securityConfig);
       Algorithm algorithm = CertUtil.getAlgorithm(securityConfig);
       Instant now = Instant.now();

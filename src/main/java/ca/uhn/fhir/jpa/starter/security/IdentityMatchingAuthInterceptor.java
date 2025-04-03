@@ -2,23 +2,25 @@ package ca.uhn.fhir.jpa.starter.security;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
+import ca.uhn.fhir.jpa.starter.custom.SecurityUtil;
+import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
 import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 
 import com.auth0.jwk.Jwk;
-import com.auth0.jwk.JwkProvider;
-import com.auth0.jwk.UrlJwkProvider;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
+import org.hl7.fhir.r4.model.OperationOutcome;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
@@ -33,7 +35,6 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -43,6 +44,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.List;
+import java.util.Map;
 
 @Interceptor
 public class IdentityMatchingAuthInterceptor {
@@ -61,16 +63,19 @@ public class IdentityMatchingAuthInterceptor {
 
 	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
 
-	public IdentityMatchingAuthInterceptor(boolean enableAuthentication, String bypassHeader, String issuer, String publicKey, String introspectUrl, String clientId, String clientSecret, List<String> protectedEndpoints, List<String> publicEndpoints) {
-		this.enableAuthentication = enableAuthentication;
-		this.bypassHeader = bypassHeader;
-		this.issuer = issuer;
-		this.publicKey = publicKey;
-		this.introspectUrl = introspectUrl;
-		this.clientId = clientId;
-		this.clientSecret = clientSecret;
-		this.protectedEndpoints = protectedEndpoints;
-		this.publicEndpoints = publicEndpoints;
+	private SecurityConfig securityConfig;
+
+	public IdentityMatchingAuthInterceptor(SecurityConfig securityConfig) {
+		this.securityConfig = securityConfig;
+		this.enableAuthentication = securityConfig.getEnableAuthentication();
+		this.bypassHeader = securityConfig.getBypassHeader();
+		this.issuer = securityConfig.getIssuer();
+		this.publicKey = securityConfig.getPublicKey();
+		this.introspectUrl = securityConfig.getIntrospectionUrl();
+		this.clientId = securityConfig.getClientId();
+		this.clientSecret = securityConfig.getClientSecret();
+		this.protectedEndpoints = securityConfig.getProtectedEndpoints();
+		this.publicEndpoints = securityConfig.getPublicEndpoints();
 	}
 
 	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
@@ -95,7 +100,13 @@ public class IdentityMatchingAuthInterceptor {
 				try {
 					String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
 					if (authHeader == null) {
-						throw new AuthenticationException("Not authorized (no authorization header found in request)");
+						// throw new AuthenticationException("Not authorized (no authorization header found in request)");
+						OperationOutcome outcome = new OperationOutcome();
+						outcome.addIssue().setSeverity(OperationOutcome.IssueSeverity.ERROR).setCode(OperationOutcome.IssueType.SECURITY).setDiagnostics("Not authorized (no authorization header found in request)");
+						response.setStatus(401);
+						response.setContentType(Constants.CT_FHIR_JSON);
+						details.getFhirContext().newJsonParser().encodeResourceToWriter(outcome, response.getWriter());
+						return false;
 					}
 					if (!authHeader.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
 						throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
@@ -173,7 +184,7 @@ public class IdentityMatchingAuthInterceptor {
 		try {
 			
 			DecodedJWT decodedJWT = JWT.decode(token);
-			if (!decodedJWT.getIssuer().equals(issuer)) {
+			if (!decodedJWT.getIssuer().equals(SecurityUtil.resolveIssuer(securityConfig))) {
 				throw new JWTVerificationException("Invalid issuer: Expected \"" + issuer + "\" but received \"" + decodedJWT.getIssuer() + "\"");
 			}
 
@@ -192,7 +203,7 @@ public class IdentityMatchingAuthInterceptor {
 				
 				// otherwise, attempt to retrieve the public key from the jwks endpoint
 				else {
-					HttpClient client = HttpClient.newBuilder().build();
+					HttpClient client = SecurityUtil.getHttpClient(securityConfig);
 
 					HttpResponse<String> response;
 					try {
@@ -206,10 +217,53 @@ public class IdentityMatchingAuthInterceptor {
 						throw new RuntimeException(e);
 					}
 					String jwksUri = new ObjectMapper().readTree(response.body()).get("jwks_uri").asText();
+					// TODO: maybe handle issue where jwks_uri might put to a different host than issuer
+					URI jwksUriParsed = URI.create(jwksUri);
+					URI issuerUri = URI.create(securityConfig.getIssuer());
+					// Replace the host in jwksUri if it's different than the host in the configured issuer
+					if (!jwksUriParsed.getHost().equals(issuerUri.getHost())) {
+						jwksUri = new URI(
+								issuerUri.getScheme(),
+								issuerUri.getUserInfo(),
+								issuerUri.getHost(),
+								issuerUri.getPort(),
+								jwksUriParsed.getPath(),
+								jwksUriParsed.getQuery(),
+								jwksUriParsed.getFragment()
+						).toString();
+					}
 
-					JwkProvider provider = new UrlJwkProvider(new URL(jwksUri));
 					// _logger.info("decodedJWT.getKeyId(): " + decodedJWT.getKeyId());
-					Jwk jwk = provider.get(decodedJWT.getKeyId());
+					// TODO: further investigate strategies for possibly using JwkProvider so that it can ignore SSL errors
+					// JwkProvider provider = new UrlJwkProvider(new URL(jwksUri));
+					// Jwk jwk = provider.get(decodedJWT.getKeyId());
+					HttpClient jwkClient = SecurityUtil.getHttpClient(securityConfig);
+					HttpRequest jwkRequest = HttpRequest.newBuilder()
+						.uri(URI.create(jwksUri))
+						.build();
+					HttpResponse<String> jwkResponse = jwkClient.send(jwkRequest, HttpResponse.BodyHandlers.ofString());
+					Map<String, Object> jwkMap = new ObjectMapper().convertValue(
+							new ObjectMapper().readTree(jwkResponse.body()), 
+							new TypeReference<Map<String, Object>>() {}
+					);
+
+					Jwk jwk = null;
+					var keys = jwkMap.get("keys");
+					if (keys instanceof Iterable) {
+						for (Object key : (Iterable<?>) keys) {
+							if (key instanceof Map) {
+								@SuppressWarnings("unchecked")
+								Map<String, Object> innerJwk = (Map<String, Object>) key;
+								if (decodedJWT.getKeyId().equals(innerJwk.get("kid"))) {
+									jwk = Jwk.fromValues(innerJwk);
+									break;
+								}
+							}
+						}
+					}
+					if (jwk == null) {
+						throw new JWTVerificationException("Could not find matching JWK for key ID: " + decodedJWT.getKeyId());
+					}
 
 					rsaPublicKey = (RSAPublicKey) jwk.getPublicKey();
 				}
@@ -224,7 +278,7 @@ public class IdentityMatchingAuthInterceptor {
 
 			Algorithm algorithm = Algorithm.RSA256(rsaPublicKey, null);
 			JWTVerifier verifier = JWT.require(algorithm)
-				.withIssuer(issuer)
+				.withIssuer(SecurityUtil.resolveIssuer(securityConfig))
 				.build(); //Reusable verifier instance
 			DecodedJWT verifiedJwt = verifier.verify(token);
 
