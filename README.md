@@ -56,7 +56,9 @@ The server supports requiring an auth token for incoming requests and is integra
 
 Security is toggled via the `security.enable-authentication` property.  When enabled, a valid UDAP server is required to be set via the `security.issuer` property. This is set by default to the [UDAP RI hosted in Foundry](https://udap-security.fast.hl7.org).
 
-A valid certificate is also required.  This can be set via the `security.cert-file` and `security.cert-password` properties.  Additionally, the server has the ability to use the UDAP RI's certificate generation endpoint to generate a certificate.  This can be toggled via the `security.fetch-cert` property.  Using this method will create a certificate file named `generated-cert.pfx` in the server's working directory.  This is intended for local testing.
+A valid certificate is also required.  This can be set via the `security.cert-file` and `security.cert-password` properties.  The `security.cert-file` property can be either a path to a p12/pfx certificate file or a base64 encoded string of a certificate.  
+
+The server also has the ability to use the [UDAP RI's](https://github.com/HL7-FAST/udap) certificate generation endpoint to generate a test certificate.  This can be toggled via the `security.fetch-cert` property.  Using this method will create a certificate file named `generated-cert.pfx` in the server's working directory.  This is only intended for local testing.
 
 Security can also be disabled by supplying a header in the request.  The name of this header is configured in the `security.bypass-header` property and defaults to `X-Allow-Public-Access`.  No value is required for this header.
 
