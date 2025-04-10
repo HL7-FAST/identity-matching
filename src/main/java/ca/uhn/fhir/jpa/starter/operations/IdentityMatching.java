@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -482,7 +483,9 @@ public class IdentityMatching {
 			outcome.addIssue().setCode(OperationOutcome.IssueType.NOTFOUND).setSeverity(OperationOutcome.IssueSeverity.WARNING)
 				.setDiagnostics(message);
 
-			outputBundle.addEntry().setResource(outcome);
+			outputBundle.addEntry().setResource(outcome).setFullUrl("urn:uuid:" + UUID.randomUUID().toString()).setSearch(
+				new Bundle.BundleEntrySearchComponent().setMode(Bundle.SearchEntryMode.OUTCOME)
+			);
 		}
 
 
