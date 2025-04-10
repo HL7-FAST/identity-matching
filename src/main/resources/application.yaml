@@ -39,8 +39,8 @@ security:
   introspection-url:
   client-id:
   client-secret:
-  # issuer: https://localhost:5001
-  issuer: https://udap-security.fast.hl7.org
+  issuer: https://localhost:5001
+  # issuer: https://udap-security.fast.hl7.org
   public-key:
   protected-endpoints:
   public-endpoints:

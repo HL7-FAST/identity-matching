@@ -558,10 +558,12 @@ public class IdentityMatching {
 
 		String message = null;
 
-		// Name validation is required for all profiles
-		var nameResult = fhirPath.evaluateFirst(patient, IDI_Patient_Name_FhirPath, BooleanType.class);
-		if (nameResult == null || !nameResult.isPresent() || !nameResult.get().booleanValue()) {
-			message = "Either the given or family name SHALL be present.";
+		// Name validation is required for all profiles if a name property is present
+		if (patient.hasName()) {
+			var nameResult = fhirPath.evaluateFirst(patient, IDI_Patient_Name_FhirPath, BooleanType.class);
+			if (nameResult == null || !nameResult.isPresent() || !nameResult.get().booleanValue()) {
+				message = "Either the given or family name SHALL be present.";
+			}
 		}
 
 		if (message == null) {
