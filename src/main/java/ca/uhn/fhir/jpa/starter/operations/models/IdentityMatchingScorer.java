@@ -228,7 +228,7 @@ public class IdentityMatchingScorer {
 
 	public boolean getAddressPostalCodeMatch() { return _addressPostalCodeMatch; }
 	public void setAddressPostalCodeMatch(boolean value) {
-		final String PostalCodeMatchMsg = "A matching postal code of residence was found.";
+		final String PostalCodeMatchMsg = "A matching postal code (first 5 digits) was found.";
 		this._addressPostalCodeMatch = value;
 		if(value) { matchMessages.add(PostalCodeMatchMsg); }
 	}

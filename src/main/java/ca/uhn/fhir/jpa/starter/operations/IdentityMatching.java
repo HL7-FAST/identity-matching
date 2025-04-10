@@ -404,15 +404,23 @@ public class IdentityMatching {
 			}
 
 			//score addresses
-			if(patient.hasAddress() && patientEntry.hasAddress()) {
-				for(Address epAddress : patientEntry.getAddress()) {
-					for(Address rpAddress : patient.getAddress()) {
-						if(rpAddress.getLine().stream().map(StringType::toString).anyMatch(line -> epAddress.getLine().stream().map(StringType::toString).anyMatch(line::equals))) {
+			if (patient.hasAddress() && patientEntry.hasAddress()) {
+				for (Address epAddress : patientEntry.getAddress()) {
+					for (Address rpAddress : patient.getAddress()) {
+						if (rpAddress.getLine().stream().map(StringType::toString)
+								.anyMatch(line -> epAddress.getLine().stream().map(StringType::toString).anyMatch(line::equals))) {
 							scorer.setAddressLineMatch(true);
 						}
-						if(rpAddress.getCity() != null && rpAddress.getCity().equals(epAddress.getCity())) { scorer.setAddressCityMatch(true); }
-						if(rpAddress.getState() != null && rpAddress.getState().equals(epAddress.getState())) { scorer.setAddressStateMatch(true);}
-						if(rpAddress.getPostalCode() != null && rpAddress.getPostalCode().equals(epAddress.getPostalCode())) { scorer.setAddressPostalCodeMatch(true);}
+						if (rpAddress.getCity() != null && rpAddress.getCity().equals(epAddress.getCity())) {
+							scorer.setAddressCityMatch(true);
+						}
+						if (rpAddress.getState() != null && rpAddress.getState().equals(epAddress.getState())) {
+							scorer.setAddressStateMatch(true);
+						}
+						if (rpAddress.getPostalCode() != null && epAddress.getPostalCode() != null
+								&& StringUtils.left(rpAddress.getPostalCode(), 5).equals(StringUtils.left(epAddress.getPostalCode(),5))) {
+							scorer.setAddressPostalCodeMatch(true);
+						}
 					}
 				}
 			}
@@ -441,9 +449,9 @@ public class IdentityMatching {
 			Bundle.BundleEntrySearchComponent searchComp = new Bundle.BundleEntrySearchComponent();
 			searchComp.setMode(Bundle.SearchEntryMode.MATCH);
 			searchComp.setScore(scorer.scoreMatch());
-			// for(String msg : scorer.getMatchMessages()) {
-			// 	logger.info(msg);
-			// }
+			for(String msg : scorer.getMatchMessages()) {
+				logger.info(msg);
+			}
 			logger.info("Match score: " + scorer.scoreMatch());
 
 			//Add extension to place match messages
