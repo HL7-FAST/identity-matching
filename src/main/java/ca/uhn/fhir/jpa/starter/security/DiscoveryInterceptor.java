@@ -68,8 +68,8 @@ public class DiscoveryInterceptor
 			myJsonObject.setGrant_types_supported(new String[] {"authorization_code", "refresh_token",  "client_credentials"});
 			myJsonObject.setScopes_supported(new String[] {"openid", "patient/*.read", "patient/*.rs", "user/*.read", "user/*.rs", "system/*.read", "system/*.rs"});
 			myJsonObject.setToken_endpoint_auth_methods_supported(new String[] { "private_key_jwt" });
-			myJsonObject.setToken_endpoint_auth_signing_alg_values_supported(new String[] { "RS256" });
-			myJsonObject.setRegistration_endpoint_jwt_signing_alg_values_supported(new String[] { "RS256" });
+			myJsonObject.setToken_endpoint_auth_signing_alg_values_supported(new String[] { "ES256", "ES384", "RS256", "RS384" });
+			myJsonObject.setRegistration_endpoint_jwt_signing_alg_values_supported(new String[] { "ES256", "ES384", "RS256", "RS384" });
 
 
 			String fhirBase = StringUtils.removeEnd(appProperties.getServer_address(), "/");
@@ -87,8 +87,21 @@ public class DiscoveryInterceptor
 			String alias = ks.aliases().nextElement();
 
 			X509Certificate certificate = (X509Certificate) ks.getCertificate(alias);
+
+			if (!(certificate.getPublicKey() instanceof RSAPublicKey)) {
+				_logger.error("Certificate must be RS256");
+				throw new IllegalArgumentException("Certificate must be RS256");
+			}
+
 			RSAPublicKey publicKey = (RSAPublicKey) certificate.getPublicKey();
 			RSAPrivateKey privateKey = (RSAPrivateKey) ks.getKey(alias, securityConfig.getCertPassword().toCharArray());
+
+			// IG specifies that the JWT SHALL be signed using the RS256 signature algorithm.
+			// https://build.fhir.org/ig/HL7/fhir-udap-security-ig/discovery.html#signed-metadata-elements
+			if (publicKey.getModulus().bitLength() != 2048) {
+				_logger.error("Certificate must be RS256");
+				throw new IllegalArgumentException("Certificate must be RS256");
+			}
 
 			Algorithm algorithm = Algorithm.RSA256(publicKey, privateKey);
 			signedMetadata = JWT.create()
