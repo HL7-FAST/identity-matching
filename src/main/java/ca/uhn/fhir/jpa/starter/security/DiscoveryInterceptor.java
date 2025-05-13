@@ -78,6 +78,8 @@ public class DiscoveryInterceptor
 			myJsonObject.setAuthorization_endpoint(issuer + "/connect/authorize");
 			myJsonObject.setToken_endpoint(issuer + "/connect/token");
 			myJsonObject.setRegistration_endpoint(issuer + "/connect/register");
+			myJsonObject.setUserinfo_endpoint(issuer + "/connect/userinfo");
+			myJsonObject.setRevocation_endpoint(issuer + "/connect/revocation");
 
 			String signedMetadata = "";
 

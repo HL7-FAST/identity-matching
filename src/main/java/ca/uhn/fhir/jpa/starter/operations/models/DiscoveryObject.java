@@ -13,6 +13,8 @@ public class DiscoveryObject {
 	private String[] scopes_supported;
 	private String authorization_endpoint;
 	private String token_endpoint;
+	private String userinfo_endpoint;
+	private String revocation_endpoint;
 	private String[] token_endpoint_auth_methods_supported;
 	private String[] token_endpoint_auth_signing_alg_values_supported;
 	private String registration_endpoint;
@@ -47,7 +49,13 @@ public class DiscoveryObject {
 	public void setAuthorization_endpoint(String system) { this.authorization_endpoint = system; }
 
 	public String getToken_endpoint() { return token_endpoint; }
-	public void setToken_endpoint(String system) { this.token_endpoint = system; }
+	public void setToken_endpoint(String endpoint) { this.token_endpoint = endpoint; }
+
+	public String getUserinfo_endpoint() { return userinfo_endpoint; }
+	public void setUserinfo_endpoint(String endpoint) { this.userinfo_endpoint = endpoint; }
+
+	public String getRevocation_endpoint() { return revocation_endpoint; }
+	public void setRevocation_endpoint(String endpoint) { this.revocation_endpoint = endpoint; }
 
 	public String[] getToken_endpoint_auth_methods_supported() { return token_endpoint_auth_methods_supported; }
 	public void setToken_endpoint_auth_methods_supported(String[] system) { this.token_endpoint_auth_methods_supported = system; }

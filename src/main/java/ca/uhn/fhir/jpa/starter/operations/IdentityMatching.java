@@ -21,6 +21,7 @@ import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.*;
+import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ResourceLoader;
@@ -190,8 +191,15 @@ public class IdentityMatching {
 
 			Bundle bundle = (Bundle)output;
 
-			bundle.setType(Bundle.BundleType.COLLECTION);
+			bundle.setType(Bundle.BundleType.SEARCHSET);
 			output.setMeta(new Meta().addProfile("http://hl7.org/fhir/us/identity-matching/StructureDefinition/idi-match-bundle"));
+
+			// self link because this is a searchset and will produce a validation warning otherwise
+			String matchUrl = StringUtils.removeEnd(appProperties.getServer_address(), "/") + "/Patient/$idi-match";
+			bundle.addLink(new Bundle.BundleLinkComponent().setRelation("self").setUrl(matchUrl));
+
+			// set total for the searchset to the number of Patient entries
+			bundle.setTotal((int)bundle.getEntry().stream().filter(x -> x.getResource() instanceof Patient).count());
 
 			// add example Organization to the output bundle as the first entry
 			var resource = ResourcePatternUtils.getResourcePatternResolver(resourceLoader).getResource("classpath:Organization-OrgExample.json");
@@ -200,7 +208,9 @@ public class IdentityMatching {
 			Organization exampleOrg = ctx.newJsonParser().parseResource(Organization.class, resourceText);
 
 			if (exampleOrg != null) {
-				bundle.getEntry().add(0, createBundleEntry(exampleOrg, this.serverAddress));
+				BundleEntryComponent entry = createBundleEntry(exampleOrg, this.serverAddress);
+				entry.setSearch(new Bundle.BundleEntrySearchComponent().setMode(Bundle.SearchEntryMode.INCLUDE));
+				bundle.getEntry().add(0, entry);
 			}		
 			else {
 				String message = "Organization-OrgExample.json file not found.";
@@ -214,10 +224,6 @@ public class IdentityMatching {
 			// add organization to identifier property
 			Reference orgRef = new Reference("http://example.org/Organization/" + exampleOrg.getIdPart());
 			bundle.setIdentifier(new Identifier().setAssigner(orgRef));
-
-
-			// bundle of type "collection" cannot have a search property in the entry
-			bundle.getEntry().forEach(x -> x.setSearch(null));
 		}
 
 		return output;
