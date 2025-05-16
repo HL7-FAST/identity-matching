@@ -37,7 +37,7 @@ COPY --from=build-hapi --chown=1001:1001 /tmp/hapi-fhir-jpaserver-starter/opente
 ENV ALLOW_EMPTY_PASSWORD=yes
 
 ########### distroless brings focus on security and runs on plain spring boot - this is the default image
-FROM gcr.io/distroless/java17-debian12:nonroot AS default
+FROM eclipse-temurin:17-alpine AS default
 # 65532 is the nonroot user's uid
 # used here instead of the name to allow Kubernetes to easily detect that the container
 # is running as a non-root (uid != 0) user.
@@ -46,5 +46,9 @@ WORKDIR /app
 
 COPY --chown=nonroot:nonroot --from=build-distroless /app /app
 COPY --chown=nonroot:nonroot --from=build-hapi /tmp/hapi-fhir-jpaserver-starter/opentelemetry-javaagent.jar /app
+
+# Container health check defaults to checking http://localhost:8080/fhir/.well-known/udap unless HEALTHCHECK_URL is set
+HEALTHCHECK --interval=10s --timeout=10s --start-period=60s \
+  CMD wget --no-check-certificate --quiet --spider -S "${HEALTHCHECK_URL:-http://localhost:8080/fhir/.well-known/udap}" || exit 1
 
 ENTRYPOINT ["java", "--class-path", "/app/main.war", "-Dloader.path=main.war!/WEB-INF/classes/,main.war!/WEB-INF/,/app/extra-classes", "org.springframework.boot.loader.PropertiesLauncher"]

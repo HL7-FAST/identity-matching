@@ -75,11 +75,11 @@ public class DiscoveryInterceptor
 			String fhirBase = StringUtils.removeEnd(appProperties.getServer_address(), "/");
 			String issuer = SecurityUtil.resolveIssuer(securityConfig);
 
-			myJsonObject.setAuthorization_endpoint(issuer + "/connect/authorize");
-			myJsonObject.setToken_endpoint(issuer + "/connect/token");
-			myJsonObject.setRegistration_endpoint(issuer + "/connect/register");
-			myJsonObject.setUserinfo_endpoint(issuer + "/connect/userinfo");
-			myJsonObject.setRevocation_endpoint(issuer + "/connect/revocation");
+			myJsonObject.setAuthorization_endpoint(StringUtils.isNotBlank(securityConfig.getAuthorizationEndpoint()) ? securityConfig.getAuthorizationEndpoint() : issuer + "/connect/authorize");
+			myJsonObject.setToken_endpoint(StringUtils.isNotBlank(securityConfig.getTokenEndpoint()) ? securityConfig.getTokenEndpoint() : issuer + "/connect/token");
+			myJsonObject.setRegistration_endpoint(StringUtils.isNotBlank(securityConfig.getRegistrationEndpoint()) ? securityConfig.getRegistrationEndpoint() : issuer + "/connect/register");
+			myJsonObject.setUserinfo_endpoint(StringUtils.isNotBlank(securityConfig.getUserinfoEndpoint()) ? securityConfig.getUserinfoEndpoint() : issuer + "/connect/userinfo");
+			myJsonObject.setRevocation_endpoint(StringUtils.isNotBlank(securityConfig.getRevocationEndpoint()) ? securityConfig.getRevocationEndpoint() : issuer + "/connect/revocation");
 
 			String signedMetadata = "";
 

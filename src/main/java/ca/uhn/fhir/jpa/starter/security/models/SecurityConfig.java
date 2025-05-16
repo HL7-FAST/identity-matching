@@ -48,6 +48,17 @@ public class SecurityConfig {
 	@Getter @Setter
 	Boolean resolveIssuer = true;
 
+	@Getter @Setter
+	String authorizationEndpoint;
+	@Getter @Setter
+	String tokenEndpoint;
+	@Getter @Setter
+	String registrationEndpoint;
+	@Getter @Setter
+	String userinfoEndpoint;
+	@Getter @Setter
+	String revocationEndpoint;
+
 	public List<String> getProtectedEndpoints() {
 		if(this.protectedEndpoints.size() > 0) {
 			return List.of(this.protectedEndpoints.get(0).split("[;]"));
