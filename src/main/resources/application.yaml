@@ -49,6 +49,8 @@ security:
   # cert-file: classpath:client-cert.pfx
   # cert-password: udap-test
   fetch-cert: true
+  fetch-cert-retry-attempts: 10
+  fetch-cert-retry-delay: 5000
   bypass-header: X-Allow-Public-Access
   ssl-verify: true
   resolve-issuer: true

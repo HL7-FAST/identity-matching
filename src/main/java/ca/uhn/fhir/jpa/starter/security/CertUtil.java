@@ -167,14 +167,43 @@ public class CertUtil {
 
       _logger.info("Fetching certificate from: " + certUrl);
 
-      HttpResponse<Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(certPath));
+      IOException lastException = null;
+      boolean success = false;
+      
+      // Retry fetching the certificate the configured number of times if it fails
+      for (int attempt = 1; attempt <= securityConfig.getFetchCertRetryAttempts(); attempt++) {
+        try {
+          _logger.info("Certificate fetch attempt {} of {}", attempt, securityConfig.getFetchCertRetryAttempts());
+          
+          HttpResponse<Path> response = client.send(request, HttpResponse.BodyHandlers.ofFile(certPath));
 
-      if (response.statusCode() != 200) {
-        throw new IOException("Failed to generate certificate: " + response.body());
+          if (response.statusCode() == 200) {
+            File tempCertFile = response.body().toFile();
+            _logger.info("Certificate saved to: " + tempCertFile.getAbsolutePath());
+            success = true;
+            break;
+          } else {
+            throw new IOException("Failed to generate certificate, HTTP status: " + response.statusCode() + ", body: " + response.body());
+          }
+        } catch (IOException | InterruptedException e) {
+          lastException = e instanceof IOException ? (IOException) e : new IOException("Request interrupted", e);
+          _logger.warn("Certificate fetch attempt {} failed: {}", attempt, e.getMessage());
+          
+          if (attempt < securityConfig.getFetchCertRetryAttempts()) {
+            try {
+              _logger.info("Waiting {} ms before retry attempt {}", securityConfig.getFetchCertRetryDelay(), attempt + 1);
+              Thread.sleep(securityConfig.getFetchCertRetryDelay());
+            } catch (InterruptedException sleepException) {
+              Thread.currentThread().interrupt();
+              throw new IOException("Certificate fetch interrupted during retry delay", sleepException);
+            }
+          }
+        }
       }
-
-      File tempCertFile = response.body().toFile();
-      _logger.info("Certificate saved to: " + tempCertFile.getAbsolutePath());
+      
+      if (!success) {
+        throw new IOException("Failed to generate certificate after " + securityConfig.getFetchCertRetryAttempts() + " attempts", lastException);
+      }
 
     }
 

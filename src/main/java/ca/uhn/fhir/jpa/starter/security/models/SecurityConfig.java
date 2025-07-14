@@ -40,6 +40,12 @@ public class SecurityConfig {
 	boolean fetchCert = true;
 
 	@Getter @Setter
+	int fetchCertRetryAttempts = 10;
+
+	@Getter @Setter
+	long fetchCertRetryDelay = 5000;
+
+	@Getter @Setter
 	String bypassHeader = "X-Allow-Public-Access";
 
 	@Getter @Setter
