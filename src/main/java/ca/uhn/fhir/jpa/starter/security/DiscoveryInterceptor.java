@@ -59,14 +59,14 @@ public class DiscoveryInterceptor
 			ObjectMapper objectMapper = new ObjectMapper();
 			DiscoveryObject myJsonObject = new DiscoveryObject();
 			myJsonObject.setUdap_versions_supported(new String[] { "1" });
-			myJsonObject.setUdap_profiles_supported(new String[] { "udap_dcr", "udap_authn", "udap_authz" });
+			myJsonObject.setUdap_profiles_supported(new String[] { "udap_dcr", "udap_authn", "udap_authz", "udap_to" });
 			myJsonObject.setUdap_authorization_extensions_supported(new String[] { "hl7-b2b" });
 			myJsonObject.setUdap_authorization_extensions_required(new String[] { "hl7-b2b" });
 			
 			myJsonObject.setUdap_certifications_supported(new String[] { "https://www.example.com/udap/profiles/example-certification" });
 			myJsonObject.setUdap_certifications_required(new String[] { "https://www.example.com/udap/profiles/example-certification" });
 			myJsonObject.setGrant_types_supported(new String[] {"authorization_code", "refresh_token",  "client_credentials"});
-			myJsonObject.setScopes_supported(new String[] {"openid", "patient/*.read", "patient/*.rs", "user/*.read", "user/*.rs", "system/*.read", "system/*.rs"});
+			myJsonObject.setScopes_supported(new String[] {"openid", "udap", "patient/*.read", "patient/*.rs", "user/*.read", "user/*.rs", "system/*.read", "system/*.rs"});
 			myJsonObject.setToken_endpoint_auth_methods_supported(new String[] { "private_key_jwt" });
 			myJsonObject.setToken_endpoint_auth_signing_alg_values_supported(new String[] { "ES256", "ES384", "RS256", "RS384" });
 			myJsonObject.setRegistration_endpoint_jwt_signing_alg_values_supported(new String[] { "ES256", "ES384", "RS256", "RS384" });
