@@ -1,11 +1,11 @@
-package ca.uhn.fhir.jpa.starter.security;
+package org.hl7.fast.security;
 import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.jpa.starter.AppProperties;
-import ca.uhn.fhir.jpa.starter.custom.SecurityUtil;
-import ca.uhn.fhir.jpa.starter.operations.models.DiscoveryObject;
-import ca.uhn.fhir.jpa.starter.security.models.SecurityConfig;
+import org.hl7.fast.common.SecurityUtil;
+import org.hl7.fast.operations.models.DiscoveryObject;
+import org.hl7.fast.security.models.SecurityConfig;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;

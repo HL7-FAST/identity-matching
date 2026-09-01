@@ -39,8 +39,8 @@ security:
   introspection-url:
   client-id:
   client-secret:
-  # issuer: https://localhost:5001
-  issuer: https://udap-security.fast.hl7.org
+  issuer: https://localhost:5001
+  # issuer: https://udap-security.fast.hl7.org
   public-key:
   protected-endpoints:
   public-endpoints:
@@ -52,7 +52,7 @@ security:
   fetch-cert-retry-attempts: 10
   fetch-cert-retry-delay: 5000
   bypass-header: X-Allow-Public-Access
-  ssl-verify: true
+  ssl-verify: false
   resolve-issuer: true
 spring:
   main:
@@ -186,7 +186,6 @@ hapi:
     #app_content_path: ./configs/app
     ### enable to set the Server URL
     server_address: http://localhost:8080/fhir
-    # server_address: https://identity-matching.fast.hl7.org/fhir
     #    defer_indexing_for_codesystems_of_size: 101
     ### Flag is true by default. This flag filters resources during package installation, allowing only those resources with a valid status (e.g. active) to be installed.
     #    validate_resource_status_for_package_upload: false 
@@ -196,7 +195,7 @@ hapi:
       identity_matching:
         # packageUrl: https://build.fhir.org/ig/HL7/fhir-identity-matching-ig/package.tgz
         name: hl7.fhir.us.identity-matching
-        version: 2.0.0-ballot
+        version: 2.0.0
     ###    example from registry (packages.fhir.org)
     #  swiss:
     #    name: swiss.mednet.fhir
@@ -295,7 +294,7 @@ hapi:
     search_prefetch_thresholds: 13,503,2003,-1
 
     # comma-separated package names, will be @ComponentScan'ed by Spring to allow for creating custom Spring beans
-    #custom-bean-packages:
+    custom-bean-packages: org.hl7.fast
     
     # comma-separated list of fully qualified interceptor classes. 
     # classes listed here will be fetched from the Spring context when combined with 'custom-bean-packages', 
