@@ -1,0 +1,16 @@
+{
+  "name": "identity-matching",
+  "$schema": "node_modules/nx/schemas/project-schema.json",
+  "includedScripts": [],
+  "projectType": "application",
+  "sourceRoot": "src",
+  "packageBase": "org.hl7.fast",
+  "fhirVersion": "R4",
+  "pluginVersion": "0.3.0",
+  "hapiReleaseVersion": "8.10.0-3",
+  "tags": [
+    "nx-fhir-server",
+    "fhir",
+    "server"
+  ]
+}

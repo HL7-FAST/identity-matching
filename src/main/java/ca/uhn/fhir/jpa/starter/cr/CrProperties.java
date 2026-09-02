@@ -1,14 +1,18 @@
 package ca.uhn.fhir.jpa.starter.cr;
 
-import org.cqframework.cql.cql2elm.CqlCompilerException;
-import org.cqframework.cql.cql2elm.CqlTranslator;
-import org.cqframework.cql.cql2elm.LibraryBuilder;
+import org.opencds.cqf.fhir.utility.client.TerminologyServerClientSettings;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
 
+@Configuration
+@ConfigurationProperties(prefix = "hapi.fhir.cr")
 public class CrProperties {
 	private Boolean enabled;
 
 	private CareGapsProperties careGaps = new CareGapsProperties();
 	private CqlProperties cql = new CqlProperties();
+	private TerminologyServerClientSettings terminologyServerClientSettings =
+			TerminologyServerClientSettings.getDefault();
 
 	public Boolean getEnabled() {
 		return enabled;
@@ -32,5 +36,13 @@ public class CrProperties {
 
 	public void setCql(CqlProperties cql) {
 		this.cql = cql;
+	}
+
+	public TerminologyServerClientSettings getTerminologyServerClientSettings() {
+		return terminologyServerClientSettings;
+	}
+
+	public void setTerminologyServerClientSettings(TerminologyServerClientSettings terminologyServerClientSettings) {
+		this.terminologyServerClientSettings = terminologyServerClientSettings;
 	}
 }
