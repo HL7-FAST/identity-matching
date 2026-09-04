@@ -38,26 +38,6 @@ management:
     metrics:
       export:
         enabled: true
-security:
-  enable-authentication: true
-  introspection-url:
-  client-id:
-  client-secret:
-  issuer: https://localhost:5001
-  # issuer: https://udap-security.fast.hl7.org
-  public-key:
-  protected-endpoints:
-  public-endpoints:
-    - /fhir/metadata
-    - /fhir/.well-known/udap
-  # cert-file: classpath:client-cert.pfx
-  # cert-password: udap-test
-  fetch-cert: true
-  fetch-cert-retry-attempts: 10
-  fetch-cert-retry-delay: 5000
-  bypass-header: X-Allow-Public-Access
-  ssl-verify: false
-  resolve-issuer: true
 
 spring:
 #  elasticsearch:
@@ -196,17 +176,6 @@ spring:
 # -------------------------------------------------------------------------------------
 hapi:
   fhir:
-    initialdata:
-      - artifacts
-      - ig-examples
-      - sample-data
-    match-validation-header: X-Match-Validation
-    match-validation-level: DEFAULT
-    remote-match-header: X-Remote-Match
-    remote-servers:
-      # - http://localhost:5826/fhir/r4
-      # - https://hapi.fhir.org/baseR4
-    remote-limit: 3
 
     # -------------------------------------------------------------------------------
     # A. Core Server & API
@@ -226,11 +195,7 @@ hapi:
     ig_runtime_upload_enabled: false
     # validate_resource_status_for_package_upload: false   # default true
     # install_transitive_ig_dependencies: true
-    implementationguides:
-      identity_matching:
-        # packageUrl: https://build.fhir.org/ig/HL7/fhir-identity-matching-ig/package.tgz
-        name: hl7.fhir.us.identity-matching
-        version: 2.0.0
+    # implementationguides:
     #   swiss:
     #     name: swiss.mednet.fhir
     #     version: 0.8.0
@@ -457,7 +422,6 @@ hapi:
     # M. Extensibility (custom beans / interceptors / providers)
     # -------------------------------------------------------------------------------
     # comma-separated package names, will be @ComponentScan'ed by Spring to allow for creating custom Spring beans
-    custom-bean-packages: org.hl7.fast
 
     # custom-bean-packages:
     # custom-interceptor-classes:
@@ -561,3 +525,61 @@ hapi:
     #   connection_ttl: 5000              # ms — time-to-live for pooled persistent connections
     #   pool_max_total: 20                # total connections across all routes
     #   pool_max_per_route: 20            # connections per target host
+
+---
+# -------------------------------------------------------------------------------------
+# Identity Matching reference implementation
+# -------------------------------------------------------------------------------------
+# Everything above this line is the upstream HAPI starter configuration. All
+# project-specific settings live in this document so upstream merges stay clean.
+# It is skipped under the test profile because the upstream starter tests run on
+# every FHIR version and expect a stock server.
+spring:
+  config:
+    activate:
+      on-profile: "!test"
+
+security:
+  enable-authentication: true
+  introspection-url:
+  client-id:
+  client-secret:
+  issuer: https://localhost:5001
+  # issuer: https://udap-security.fast.hl7.org
+  public-key:
+  protected-endpoints:
+  public-endpoints:
+    - /fhir/metadata
+    - /fhir/.well-known/udap
+  # cert-file: classpath:client-cert.pfx
+  # cert-password: udap-test
+  fetch-cert: true
+  fetch-cert-retry-attempts: 10
+  fetch-cert-retry-delay: 5000
+  bypass-header: X-Allow-Public-Access
+  ssl-verify: false
+  resolve-issuer: true
+
+hapi:
+  fhir:
+    custom-bean-packages: org.hl7.fast
+    initialdata:
+      - artifacts
+      - ig-examples
+      - sample-data
+    match-validation-header: X-Match-Validation
+    match-validation-level: DEFAULT
+    remote-match-header: X-Remote-Match
+    remote-servers:
+      # - http://localhost:5826/fhir/r4
+      # - https://hapi.fhir.org/baseR4
+    remote-limit: 3
+    implementationguides:
+      identity_matching:
+        # packageUrl: https://build.fhir.org/ig/HL7/fhir-identity-matching-ig/package.tgz
+        name: hl7.fhir.us.identity-matching
+        version: 2.0.0
+      us_core:
+        name: hl7.fhir.us.core
+        version: 6.1.0
+        installMode: STORE_AND_INSTALL

@@ -5,7 +5,6 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fast.config.IdentityMatchingProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -18,7 +17,10 @@ import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.api.dao.IFhirResourceDao;
 import ca.uhn.fhir.jpa.starter.AppProperties;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
-import jakarta.annotation.PostConstruct;
+import ca.uhn.fhir.IHapiBootOrder;
+import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 
 // Ensure data is loaded when the application starts
 @Component
@@ -26,26 +28,32 @@ public class DataInitializer {
 
   private static final Logger logger = LoggerFactory.getLogger(DataInitializer.class);
 
-  @Autowired
-  private FhirContext fhirContext;
+  private final FhirContext fhirContext;
+  private final DaoRegistry daoRegistry;
+  private final AppProperties appProperties;
+  private final IdentityMatchingProperties identityMatchingProperties;
+  private final ResourceLoader resourceLoader;
+  private final JpaStorageSettings storageSettings;
 
-  @Autowired
-  private DaoRegistry daoRegistry;
+  public DataInitializer(
+      FhirContext fhirContext,
+      DaoRegistry daoRegistry,
+      AppProperties appProperties,
+      IdentityMatchingProperties identityMatchingProperties,
+      ResourceLoader resourceLoader,
+      JpaStorageSettings storageSettings) {
+    this.fhirContext = fhirContext;
+    this.daoRegistry = daoRegistry;
+    this.appProperties = appProperties;
+    this.identityMatchingProperties = identityMatchingProperties;
+    this.resourceLoader = resourceLoader;
+    this.storageSettings = storageSettings;
+  }
 
-  @Autowired
-  private AppProperties appProperties;
 
-  @Autowired
-  private IdentityMatchingProperties identityMatchingProperties;
-
-  @Autowired
-  private ResourceLoader resourceLoader;
-
-  @Autowired
-  private JpaStorageSettings storageSettings;
-
-
-  @PostConstruct
+  // Runs after HAPI registers its batch jobs, because saving a SearchParameter starts a REINDEX job.
+  @EventListener(ContextRefreshedEvent.class)
+  @Order(IHapiBootOrder.ADD_JOB_DEFINITIONS + 1)
   public void initializeData() {
 
     if (identityMatchingProperties.getInitialData() == null || identityMatchingProperties.getInitialData().isEmpty()) {
@@ -58,14 +66,14 @@ public class DataInitializer {
     storageSettings.setEnforceReferentialIntegrityOnWrite(false);
 
     for (String directoryPath : identityMatchingProperties.getInitialData()) {
-      logger.info("Loading resources from directory: " + directoryPath);
+      logger.info("Loading resources from directory: {}", directoryPath);
 
       Resource[] resources = null;
 
       try {
         resources = ResourcePatternUtils.getResourcePatternResolver(resourceLoader).getResources("classpath:" + directoryPath + "/**/*.json");  
       } catch (Exception e) {
-        logger.error("Error loading resources from directory: " + directoryPath, e);
+        logger.error("Error loading resources from directory: {}", directoryPath, e);
         continue;
       }
 
@@ -77,9 +85,9 @@ public class DataInitializer {
 
           IFhirResourceDao<IBaseResource> dao = daoRegistry.getResourceDao(fhirResource);
           dao.update(fhirResource, new SystemRequestDetails());
-          logger.info("Loaded resource: " + resource.getFilename());
+          logger.info("Loaded resource: {}", resource.getFilename());
         } catch (Exception e) {
-          logger.error("Error loading resource: " + resource.getFilename(), e);
+          logger.error("Error loading resource: {}", resource.getFilename(), e);
         }
       }
 
