@@ -544,8 +544,8 @@ security:
   introspection-url:
   client-id:
   client-secret:
-  issuer: https://localhost:5001
-  # issuer: https://udap-security.fast.hl7.org
+  # issuer: https://localhost:5001
+  issuer: https://udap-security.fast.hl7.org
   public-key:
   protected-endpoints:
   public-endpoints:
@@ -563,6 +563,8 @@ security:
 hapi:
   fhir:
     custom-bean-packages: org.hl7.fast
+    server_address: http://localhost:8080/fhir
+    # server_address: https://identity-matching.fast.hl7.org/fhir
     initialdata:
       - artifacts
       - ig-examples
