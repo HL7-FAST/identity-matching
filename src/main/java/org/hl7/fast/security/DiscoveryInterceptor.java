@@ -61,7 +61,7 @@ public class DiscoveryInterceptor
 			myJsonObject.setUdap_versions_supported(new String[] { "1" });
 			myJsonObject.setUdap_profiles_supported(new String[] { "udap_dcr", "udap_authn", "udap_authz", "udap_to" });
 			myJsonObject.setUdap_authorization_extensions_supported(new String[] { "hl7-b2b" });
-			myJsonObject.setUdap_authorization_extensions_required(new String[] { "hl7-b2b" });
+			myJsonObject.setUdap_authorization_extensions_required(new String[] {});
 			
 			myJsonObject.setUdap_certifications_supported(new String[] { "https://www.example.com/udap/profiles/example-certification" });
 			myJsonObject.setUdap_certifications_required(new String[] { "https://www.example.com/udap/profiles/example-certification" });
