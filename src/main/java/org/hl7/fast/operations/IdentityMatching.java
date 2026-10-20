@@ -11,6 +11,7 @@ import org.hl7.fast.operations.models.IdentifierRegistry;
 import org.hl7.fast.operations.models.IdentityMatchParams;
 import org.hl7.fast.operations.models.IdentityMatchValidationLevel;
 import org.hl7.fast.operations.models.IdentityMatchingScorer;
+import io.opentelemetry.api.trace.Span;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.api.server.IBundleProvider;
@@ -113,18 +114,7 @@ public class IdentityMatching {
 		}
 
 
-		// Patient resource must be provided and the parameter must be named "patient"
-		if (identityMatchParams.getPatient() == null) {
-
-			String message = "A parameter named 'resource' must be provided with a valid Patient resource.";
-			OperationOutcome outcome = new OperationOutcome();
-			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
-				.setDiagnostics(message);
-			
-			throw new InvalidRequestException(message, outcome);
-		}
-
-		Resource output = doMatch(identityMatchParams, theRequestDetails);
+		Resource output = doMatch("match", identityMatchParams, theRequestDetails);
 
 		if (output.getResourceType() == ResourceType.Bundle) {
 			Bundle bundle = (Bundle)output;
@@ -178,18 +168,7 @@ public class IdentityMatching {
 		}
 
 
-		// Patient resource must be provided and the parameter must be named "patient"
-		if (identityMatchParams.getPatient() == null) {
-
-			String message = "A parameter named 'patient' must be provided with a valid Patient resource.";
-			OperationOutcome outcome = new OperationOutcome();
-			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
-				.setDiagnostics(message);
-			
-			throw new InvalidRequestException(message, outcome);
-		}
-
-		Resource output = doMatch(identityMatchParams, theRequestDetails);
+		Resource output = doMatch("idi-match", identityMatchParams, theRequestDetails);
 
 		if (output.getResourceType() == ResourceType.Bundle) {
 
@@ -234,11 +213,48 @@ public class IdentityMatching {
 	}
 
 
-	protected Resource doMatch(
-		IdentityMatchParams params,
-		RequestDetails theRequestDetails
-	) throws IOException 
-	{
+	protected Resource doMatch(String operation, IdentityMatchParams params, RequestDetails theRequestDetails) throws IOException {
+		String outcome = "error";
+		IdentityMatchValidationLevel validationLevel = null;
+		int matches = 0;
+		try {
+			if (params.getPatient() == null) {
+				String paramName = "match".equals(operation) ? "resource" : "patient";
+				throw invalidRequest("A parameter named '" + paramName + "' must be provided with a valid Patient resource.");
+			}
+			validationLevel = resolveValidationLevel(theRequestDetails);
+			Bundle result = matchPatient(params, validationLevel, theRequestDetails);
+			matches = (int) result.getEntry().stream().filter(e -> e.getResource() instanceof Patient).count();
+			outcome = matches == 0 ? "no_match" : "matched";
+			return result;
+		} catch (InvalidRequestException ex) {
+			// the level is only known once the header parsed, so a null level means the request itself was bad
+			outcome = validationLevel == null ? "invalid_request" : "validation_failed";
+			throw ex;
+		} finally {
+			recordMatch(operation, validationLevel, outcome, matches);
+		}
+	}
+
+	/** Match detail goes on the request span and into one log line. */
+	private void recordMatch(String operation, IdentityMatchValidationLevel validationLevel, String outcome, int matches) {
+		String validation = validationLevel == null ? "-" : validationLevel.name();
+		Span span = Span.current();
+		span.setAttribute("fhir.match.operation", operation);
+		span.setAttribute("fhir.match.validation", validation);
+		span.setAttribute("fhir.match.outcome", outcome);
+		span.setAttribute("fhir.match.count", matches);
+		logger.info("match operation={} validation={} outcome={} matches={}", operation, validation, outcome, matches);
+	}
+
+	private static InvalidRequestException invalidRequest(String message) {
+		OperationOutcome outcome = new OperationOutcome();
+		outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR).setDiagnostics(message);
+		return new InvalidRequestException(message, outcome);
+	}
+
+	private Bundle matchPatient(IdentityMatchParams params, IdentityMatchValidationLevel validationLevel,
+			RequestDetails theRequestDetails) throws IOException {
 
 		// assertIDIPatientProfile = false;
 		// assertIDIPatientL0Profile = false;
@@ -254,7 +270,7 @@ public class IdentityMatching {
 		
 		
 		// ensure we have a valid Patient resource
-		assertPatientIsValid(patient, theRequestDetails);
+		assertPatientIsValid(patient, validationLevel);
 
 
 		//build out identifier search params and base identifier params by traversing the identifiers
@@ -503,20 +519,7 @@ public class IdentityMatching {
 
 	}
 
-	private void assertPatientIsValid(Patient patient, RequestDetails theRequestDetails) {
-
-		// Patient resource must be provided
-		if (patient == null) {
-			String message = "A valid Patient resource must be provided.";
-			OperationOutcome outcome = new OperationOutcome();
-			outcome.addIssue().setCode(OperationOutcome.IssueType.INVALID).setSeverity(OperationOutcome.IssueSeverity.ERROR)
-				.setDiagnostics(message);
-			
-			throw new InvalidRequestException(message, outcome);
-		}
-
-		// Validate the Patient resource if configured
-
+	private IdentityMatchValidationLevel resolveValidationLevel(RequestDetails theRequestDetails) {
 		IdentityMatchValidationLevel validationLevel = identityMatchingProperties.getMatchValidationLevel();
 
 		// override validationLevel to the value of the header if it is a valid value of the enum
@@ -531,6 +534,11 @@ public class IdentityMatching {
 				);
 			}
 		}
+		return validationLevel;
+	}
+
+	/** Validate the Patient resource against the IDI profiles the level asks for. */
+	private void assertPatientIsValid(Patient patient, IdentityMatchValidationLevel validationLevel) {
 
 		// no validation required
 		if (validationLevel == IdentityMatchValidationLevel.NONE) {
@@ -1053,7 +1061,7 @@ public class IdentityMatching {
 		}
 
 
-		logger.info("Search Map: " + searchMap.toNormalizedQueryString(FhirContextProvider.getFhirContext()));
+		logger.debug("Search Map: " + searchMap.toNormalizedQueryString(FhirContextProvider.getFhirContext()));
 		IBundleProvider patientResults = patientDao.search(searchMap, theRequestDetails);
 
 		patientResults.getResources(0, patientResults.size())
@@ -1092,15 +1100,19 @@ public class IdentityMatching {
 							}
 						});
 					} catch (Exception ex) {
-						logger.error("Error searching remote server: " + remoteServer + " -- " + ex.getMessage());
+						logger.error("Error searching remote server: " + remoteServer + " -- " + withoutQuery(ex.getMessage()));
 					}
-
 				}
 			}
 		}
 
 		return patientBundle;
 
+	}
+
+	/** HAPI client messages quote the failing URL, whose query string is the patient's demographics. */
+	static String withoutQuery(String message) {
+		return message == null ? null : message.replaceAll("\\?\\S*", "");
 	}
 
 	private Bundle.BundleEntryComponent createBundleEntry(DomainResource resource, String serverBaseUrl) {

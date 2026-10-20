@@ -8,6 +8,7 @@ import ca.uhn.fhir.rest.api.Constants;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 
+import com.auth0.jwk.InvalidPublicKeyException;
 import com.auth0.jwk.Jwk;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
@@ -18,6 +19,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.api.trace.Span;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang3.StringUtils;
 import org.hl7.fhir.r4.model.OperationOutcome;
@@ -29,12 +31,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -64,6 +67,7 @@ public class IdentityMatchingAuthInterceptor {
 	private final Logger _logger = LoggerFactory.getLogger(IdentityMatchingAuthInterceptor.class);
 
 	private SecurityConfig securityConfig;
+	static final String ACCESS_OUTCOME_ATTRIBUTE = "udap.access.outcome";
 
 	public IdentityMatchingAuthInterceptor(SecurityConfig securityConfig) {
 		this.securityConfig = securityConfig;
@@ -79,77 +83,112 @@ public class IdentityMatchingAuthInterceptor {
 	}
 
 	@Hook(Pointcut.SERVER_INCOMING_REQUEST_POST_PROCESSED)
-	public boolean incomingRequestPostProcessed(RequestDetails details, HttpServletRequest request, HttpServletResponse response) throws AuthenticationException, IOException {
+	public boolean incomingRequestPostProcessed(RequestDetails details, HttpServletRequest request) throws AuthenticationException {
 
 		if (!enableAuthentication) {
-			return true;
+			return record(AccessOutcome.AUTH_DISABLED, null, request);
 		}
-
-		boolean authenticated = false;
 
 		//check for public access header, if not detected then proceed with authentication checks
 		// if public access header is present, circumvent authentication and allow public access to all endpoints
 		//
 		//*** THIS IS JUST FOR RI TESTING, THIS SHOULD NOT BE INCLUDED IN A PRODUCTION SYSTEM ***
 		String publicAccessHeader = request.getHeader(bypassHeader);
-		if(publicAccessHeader == null) {
+		if (publicAccessHeader != null) {
+			_logger.info("The '{}' header was detected, ignoring security configuration.", bypassHeader);
+			return record(AccessOutcome.BYPASS_HEADER, null, request);
+		}
 
-			// check if request path is an endpoint that needs validation
-			// no values in proctedEndpoints means all endpoints require authentication
-			if ((protectedEndpoints.size() == 0 || protectedEndpoints.contains(request.getRequestURI())) && !publicEndpoints.contains(request.getRequestURI())) {
-				try {
-					String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
-					if (authHeader == null) {
-						// throw new AuthenticationException("Not authorized (no authorization header found in request)");
-						OperationOutcome outcome = new OperationOutcome();
-						outcome.addIssue().setSeverity(OperationOutcome.IssueSeverity.ERROR).setCode(OperationOutcome.IssueType.SECURITY).setDiagnostics("Not authorized (no authorization header found in request)");
-						response.setStatus(401);
-						response.setContentType(Constants.CT_FHIR_JSON);
-						details.getFhirContext().newJsonParser().encodeResourceToWriter(outcome, response.getWriter());
-						return false;
-					}
-					if (!authHeader.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
-						throw new AuthenticationException("Not authorized (authorization header does not contain a bearer token)");
-					}
+		// check if request path is an endpoint that needs validation
+		// no values in proctedEndpoints means all endpoints require authentication
+		String uri = request.getRequestURI();
+		if (publicEndpoints.contains(uri)) {
+			return record(AccessOutcome.PUBLIC_ENDPOINT, null, request);
+		}
+		if (!protectedEndpoints.isEmpty() && !protectedEndpoints.contains(uri)) {
+			return record(AccessOutcome.UNPROTECTED_ENDPOINT, null, request);
+		}
 
-					//if a confidential client, use the client secret and introspect endpoint to validate token
-					if (!StringUtils.isBlank(clientSecret) && !StringUtils.isBlank(introspectUrl)) {
-						authenticated = introspectionCheck(authHeader);
-					} else { //assume public client and validate using the token and supplied public key
-						authenticated = validateToken(authHeader);
-					}
+		String authHeader = request.getHeader(Constants.HEADER_AUTHORIZATION);
+		if (authHeader == null) {
+			record(AccessOutcome.MISSING_TOKEN, null, request);
+			throw unauthorized("Not authorized (no authorization header found in request)", "Bearer");
+		}
+		if (!authHeader.startsWith(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER)) {
+			record(AccessOutcome.NOT_BEARER, null, request);
+			throw unauthorized("Not authorized (authorization header does not contain a bearer token)", "Bearer error=\"invalid_request\"");
+		}
+		String token = authHeader.substring(Constants.HEADER_AUTHORIZATION_VALPREFIX_BEARER.length()).trim();
 
-				} catch (AuthenticationException ex) {
-					_logger.error(ex.getMessage(), ex);
-					_logger.info("Failed to authenticate request");
-					throw ex;
-				} catch (NoSuchAlgorithmException | InvalidKeySpecException ex) {
-					throw new RuntimeException(ex);
+		//if a confidential client, use the client secret and introspect endpoint to validate token
+		boolean introspect = !StringUtils.isBlank(clientSecret) && !StringUtils.isBlank(introspectUrl);
+		try {
+			if (introspect) {
+				JsonNode introspection = introspectionCheck(token);
+				String introspectedClient = introspection.path("client_id").asText(null);
+				if (!introspection.path("active").asBoolean()) {
+					record(AccessOutcome.INTROSPECTION_INACTIVE, introspectedClient, request);
+					throw unauthorized("Not authorized (token is not active)", "Bearer error=\"invalid_token\"");
 				}
-			} //otherwise, allow all
-			else {
-				authenticated = true;
+				return record(AccessOutcome.INTROSPECTION_OK, introspectedClient, request);
 			}
+			//assume public client and validate using the token and supplied public key
+			DecodedJWT jwt = validateToken(token);
+			String jwtClient = jwt.getClaim("client_id").asString();
+			return record(AccessOutcome.JWT_OK, jwtClient != null ? jwtClient : jwt.getSubject(), request);
+		} catch (AuthenticationException ex) {
+			throw ex;
+		} catch (AccessException ex) {
+			record(ex.outcome, null, request);
+			if (ex.outcome.isError()) {
+				throw ex;
+			}
+			throw unauthorized("Not authorized (" + ex.getMessage() + ")", "Bearer error=\"invalid_token\"");
+		} catch (RuntimeException ex) {
+			record(introspect ? AccessOutcome.INTROSPECTION_OTHER : AccessOutcome.JWT_OTHER, null, request);
+			throw ex;
 		}
-		else { //public access header detected or a public access point was requested - allow request
-			authenticated = true;
-			_logger.info("The '" + bypassHeader + "' header was detected, ignoring security configuration.");
-		}
+	}
 
-		if(!authenticated) {
-			throw new AuthenticationException("You are unauthorized to perform this request.");
-		}
-
+	/** The single place an access decision is recorded: on the request span and in the log. Path only, never the query string. */
+	private boolean record(AccessOutcome outcome, String clientId, HttpServletRequest request) {
+		Span.current().setAttribute(ACCESS_OUTCOME_ATTRIBUTE, outcome.name().toLowerCase());
+		_logger.info("access decision={} method={} reason={} client_id={} path={}", outcome.decision, outcome.method,
+				outcome.reason, clientId != null ? clientId : "-", request.getRequestURI());
 		return true;
 	}
 
-	private boolean introspectionCheck(String authHeader) throws JsonProcessingException {
+	/** 401 with a security-coded OperationOutcome and the RFC 6750 challenge header. */
+	private static AuthenticationException unauthorized(String message, String challenge) {
+		OperationOutcome outcome = new OperationOutcome();
+		outcome.addIssue().setSeverity(OperationOutcome.IssueSeverity.ERROR).setCode(OperationOutcome.IssueType.SECURITY).setDiagnostics(message);
+		AuthenticationException ex = new AuthenticationException(message);
+		ex.setOperationOutcome(outcome);
+		ex.addResponseHeader("WWW-Authenticate", challenge);
+		return ex;
+	}
+
+	/** Carries a classified outcome out of the token checks so the hook records it exactly once. */
+	static final class AccessException extends RuntimeException {
+		final AccessOutcome outcome;
+
+		AccessException(AccessOutcome outcome, String message) {
+			super(message);
+			this.outcome = outcome;
+		}
+
+		AccessException(AccessOutcome outcome, Throwable cause) {
+			super(cause.getMessage(), cause);
+			this.outcome = outcome;
+		}
+	}
+
+	private JsonNode introspectionCheck(String token) {
 
 		// Make an HTTP request to the introspection endpoint to validate the access token.
 		RestTemplate restTemplate = new RestTemplate();
 		HttpHeaders headers = new HttpHeaders();
 
-		var token = authHeader.split(" ")[1];
 		MultiValueMap<String, String> requestBody = new LinkedMultiValueMap<>();
 		requestBody.add("token", token);
 		requestBody.add("client_id", clientId);
@@ -158,21 +197,23 @@ public class IdentityMatchingAuthInterceptor {
 
 		HttpEntity<MultiValueMap<String, String>> idpRequest = new HttpEntity<>(requestBody, headers);
 
-		ResponseEntity<String> idpResponse = restTemplate.postForEntity(introspectUrl, idpRequest, String.class);
+		ObjectMapper objectMapper = new ObjectMapper();
+		try {
+			ResponseEntity<String> idpResponse = restTemplate.postForEntity(introspectUrl, idpRequest, String.class);
 
-		if (idpResponse.getStatusCode() == HttpStatus.OK) {
-			ObjectMapper objectMapper = new ObjectMapper();
-			JsonNode introspectionResponse = objectMapper.readTree(idpResponse.getBody());
-			return introspectionResponse.get("active").asBoolean();
-		}
-		else {
-			return false;
+			if (idpResponse.getStatusCode() == HttpStatus.OK) {
+				return objectMapper.readTree(idpResponse.getBody());
+			}
+			else {
+				return objectMapper.createObjectNode().put("active", false);
+			}
+		} catch (RestClientException | JsonProcessingException ex) {
+			_logger.warn("Token introspection failed: {}", ex.toString());
+			throw new AccessException(AccessOutcome.INTROSPECTION_FAILURE, ex);
 		}
 	}
 
-	private boolean validateToken(String authHeader) throws NoSuchAlgorithmException, InvalidKeySpecException {
-
-		var token = authHeader.split(" ")[1];
+	private DecodedJWT validateToken(String token) {
 
 		//current set up for RSA 256, change as necessary
 		// System.out.println("publicKey: " + publicKey);
@@ -184,8 +225,8 @@ public class IdentityMatchingAuthInterceptor {
 		try {
 			
 			DecodedJWT decodedJWT = JWT.decode(token);
-			if (!decodedJWT.getIssuer().equals(SecurityUtil.resolveIssuer(securityConfig))) {
-				throw new JWTVerificationException("Invalid issuer: Expected \"" + issuer + "\" but received \"" + decodedJWT.getIssuer() + "\"");
+			if (!SecurityUtil.resolveIssuer(securityConfig).equals(decodedJWT.getIssuer())) {
+				throw new AccessException(AccessOutcome.JWT_ISSUER_MISMATCH, "Invalid issuer: Expected \"" + issuer + "\" but received \"" + decodedJWT.getIssuer() + "\"");
 			}
 
 			// TODO: implement caching
@@ -211,10 +252,9 @@ public class IdentityMatchingAuthInterceptor {
 							.uri(URI.create(StringUtils.removeEnd(issuer, "/") + "/.well-known/openid-configuration"))
 							.build();	
 						response = client.send(request, HttpResponse.BodyHandlers.ofString());
-					} catch (Exception e) {
-						// TODO: handle exception
-						System.err.println("HTTP Exception: " + e.getMessage());
-						throw new RuntimeException(e);
+					} catch (IOException | InterruptedException e) {
+						_logger.warn("Discovery document fetch failed: {}", e.toString());
+						throw new AccessException(AccessOutcome.JWT_DEPENDENCY_FAILURE, e);
 					}
 					String jwksUri = new ObjectMapper().readTree(response.body()).get("jwks_uri").asText();
 					// TODO: maybe handle issue where jwks_uri might put to a different host than issuer
@@ -262,7 +302,7 @@ public class IdentityMatchingAuthInterceptor {
 						}
 					}
 					if (jwk == null) {
-						throw new JWTVerificationException("Could not find matching JWK for key ID: " + decodedJWT.getKeyId());
+						throw new AccessException(AccessOutcome.JWT_UNKNOWN_KEY, "Could not find matching JWK for key ID: " + decodedJWT.getKeyId());
 					}
 
 					rsaPublicKey = (RSAPublicKey) jwk.getPublicKey();
@@ -270,7 +310,7 @@ public class IdentityMatchingAuthInterceptor {
 
 				// if we still don't have the public key, throw an exception
 				if (rsaPublicKey == null) {
-					throw new JWTVerificationException("Could not determine public key");
+					throw new AccessException(AccessOutcome.JWT_OTHER, "Could not determine public key");
 				}
 
 			// }			
@@ -280,15 +320,18 @@ public class IdentityMatchingAuthInterceptor {
 			JWTVerifier verifier = JWT.require(algorithm)
 				.withIssuer(SecurityUtil.resolveIssuer(securityConfig))
 				.build(); //Reusable verifier instance
-			DecodedJWT verifiedJwt = verifier.verify(token);
+			return verifier.verify(token);
 
-			return verifiedJwt != null;
-
-		} catch (JWTVerificationException ex){
-			throw new JWTVerificationException(ex.getMessage());
-		} catch (Exception ex) {
-			System.err.println("Exception: " + ex.getMessage());
-			throw new RuntimeException(ex);
+		} catch (AccessException ex) {
+			throw ex;
+		} catch (JWTVerificationException ex) {
+			throw new AccessException(AccessOutcome.fromJwtException(ex), ex);
+		} catch (IOException | InterruptedException ex) {
+			_logger.warn("JWKS fetch failed: {}", ex.toString());
+			throw new AccessException(AccessOutcome.JWT_DEPENDENCY_FAILURE, ex);
+		} catch (URISyntaxException | NoSuchAlgorithmException | InvalidKeySpecException | InvalidPublicKeyException | RuntimeException ex) {
+			_logger.warn("Token validation failed: {}", ex.toString());
+			throw new AccessException(AccessOutcome.JWT_OTHER, ex);
 		}
 	}
 }

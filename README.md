@@ -79,6 +79,36 @@ The name of this header is configured in the `hapi.fhir.remote-match-header` pro
 
 
 
+## Telemetry
+
+Telemetry is off unless the bundled OpenTelemetry Java agent is attached through environment variables.
+
+Local Grafana stack with a provisioned dashboard:
+
+```bash
+docker compose -f docker-compose.otel.yml up --build   # Grafana at http://localhost:3000
+```
+
+Outside Docker, fetch the agent and attach it:
+
+```bash
+curl -LSs -o otel/opentelemetry-javaagent.jar https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.32.0/opentelemetry-javaagent.jar
+export JAVA_TOOL_OPTIONS=-javaagent:$PWD/otel/opentelemetry-javaagent.jar
+```
+
+Environment variables (local values in `docker-compose.otel.yml`):
+
+| Variable | Value |
+|---|---|
+| `OTEL_SERVICE_NAME` | `fast-identity-matching` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` locally, or the Grafana Cloud OTLP gateway |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Grafana Cloud: `Authorization=Basic <base64 of instanceId:token>` |
+| `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment.name=production` on hosted instances, unset locally |
+| `OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED` | `false` |
+| `OTEL_INSTRUMENTATION_TOMCAT_ENABLED`<br>`OTEL_INSTRUMENTATION_SERVLET_ENABLED`<br>`OTEL_INSTRUMENTATION_OPENTELEMETRY_API_ENABLED`<br>`OTEL_INSTRUMENTATION_OPENTELEMETRY_INSTRUMENTATION_API_ENABLED`<br>`OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED` | `true` |
+
+Search query strings are left out of spans and the access log by default. Set `telemetry.capture-query-strings: true` (env `TELEMETRY_CAPTURE_QUERY_STRINGS=true`) to keep them.
+
 ## Questions and Contributions
 Questions about the project can be asked in the [FAST Identity stream on the FHIR Zulip Chat](https://chat.fhir.org/#narrow/stream/294750-FHIR-at-Scale-Taskforce-.28FAST.29.3A-Identity).
 

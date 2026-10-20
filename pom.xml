@@ -376,6 +376,10 @@
             <version>${spring_boot_version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-api</artifactId>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/io.micrometer/micrometer-core -->
         <dependency>
             <groupId>io.micrometer</groupId>

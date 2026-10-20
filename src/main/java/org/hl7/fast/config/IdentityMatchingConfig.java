@@ -4,6 +4,7 @@ import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.starter.AppProperties;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.interceptor.CorsInterceptor;
+import ca.uhn.fhir.rest.server.interceptor.LoggingInterceptor;
 
 import org.hl7.fast.operations.IdentityMatching;
 import org.hl7.fast.security.CertInterceptor;
@@ -11,6 +12,8 @@ import org.hl7.fast.security.CertUtil;
 import org.hl7.fast.security.DiscoveryInterceptor;
 import org.hl7.fast.security.IdentityMatchingAuthInterceptor;
 import org.hl7.fast.security.models.SecurityConfig;
+import org.hl7.fast.telemetry.FhirRouteInterceptor;
+import org.hl7.fast.telemetry.TelemetryProperties;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
@@ -29,17 +32,22 @@ public class IdentityMatchingConfig {
 	private final AppProperties appProperties;
 	private final IdentityMatchingProperties identityMatchingProperties;
 	private final SecurityConfig securityConfig;
+	private final TelemetryProperties telemetryProperties;
+	private final LoggingInterceptor loggingInterceptor;
 	private final DaoRegistry daoRegistry;
 	private final ResourceLoader resourceLoader;
 	private final Optional<CorsInterceptor> corsInterceptor;
 
 	public IdentityMatchingConfig(RestfulServer restfulServer, AppProperties appProperties,
-			IdentityMatchingProperties identityMatchingProperties, SecurityConfig securityConfig, DaoRegistry daoRegistry,
+			IdentityMatchingProperties identityMatchingProperties, SecurityConfig securityConfig,
+			TelemetryProperties telemetryProperties, LoggingInterceptor loggingInterceptor, DaoRegistry daoRegistry,
 			ResourceLoader resourceLoader, Optional<CorsInterceptor> corsInterceptor) {
 		this.restfulServer = restfulServer;
 		this.appProperties = appProperties;
 		this.identityMatchingProperties = identityMatchingProperties;
 		this.securityConfig = securityConfig;
+		this.telemetryProperties = telemetryProperties;
+		this.loggingInterceptor = loggingInterceptor;
 		this.daoRegistry = daoRegistry;
 		this.resourceLoader = resourceLoader;
 		this.corsInterceptor = corsInterceptor;
@@ -61,6 +69,12 @@ public class IdentityMatchingConfig {
 		IdentityMatching identityMatcher = new IdentityMatching(appProperties, identityMatchingProperties,
 				daoRegistry.getResourceDao(Patient.class), resourceLoader);
 		restfulServer.registerProviders(identityMatcher);
+
+		restfulServer.registerInterceptor(new FhirRouteInterceptor(telemetryProperties.isCaptureQueryStrings()));
+		// The access log keeps its configured format, only the query string slot is left blank.
+		if (!telemetryProperties.isCaptureQueryStrings()) {
+			loggingInterceptor.setMessageFormat(appProperties.getLogger().getFormat().replace("${requestParameters}", ""));
+		}
 
 		// register security interceptors
 		restfulServer.registerInterceptor(new DiscoveryInterceptor(appProperties, securityConfig));

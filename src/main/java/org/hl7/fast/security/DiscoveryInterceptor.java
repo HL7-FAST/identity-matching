@@ -3,6 +3,7 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.jpa.starter.AppProperties;
+import org.hl7.fast.telemetry.FhirRouteInterceptor;
 import org.hl7.fast.common.SecurityUtil;
 import org.hl7.fast.operations.models.DiscoveryObject;
 import org.hl7.fast.security.models.SecurityConfig;
@@ -52,6 +53,7 @@ public class DiscoveryInterceptor
 	public boolean incomingRequestPreProcessed(HttpServletRequest theRequest, HttpServletResponse theResponse) throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException, InvalidKeySpecException, UnrecoverableKeyException {
 		// Check if the request is for /.well-known/udap
 		if (theRequest.getRequestURI().equals("/fhir/.well-known/udap")) {
+			FhirRouteInterceptor.tagRoute("/fhir/.well-known/udap");
 
 			_logger.info("Intercepted discovery request, sending security capability statement.");
 
