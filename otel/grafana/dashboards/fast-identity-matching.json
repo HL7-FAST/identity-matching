@@ -1435,7 +1435,7 @@
                         "name": "${prometheus}"
                       },
                       "spec": {
-                        "expr": "sum(\nlast_over_time(fhir_server_requests_total{service_name=~\"$service\", fhir_interaction!=\"\", fhir_interaction!~\"operation|unhandled\"}[$__range])\n - (fhir_server_requests_total{service_name=~\"$service\", fhir_interaction!=\"\", fhir_interaction!~\"operation|unhandled\"} offset $__range or last_over_time(fhir_server_requests_total{service_name=~\"$service\", fhir_interaction!=\"\", fhir_interaction!~\"operation|unhandled\"}[$__range]) * 0)) or vector(0)",
+                        "expr": "sum(\nlast_over_time(fhir_server_requests_total{service_name=~\"$service\", fhir_interaction!=\"\", fhir_interaction!~\"operation|unhandled|other\"}[$__range])\n - (fhir_server_requests_total{service_name=~\"$service\", fhir_interaction!=\"\", fhir_interaction!~\"operation|unhandled|other\"} offset $__range or last_over_time(fhir_server_requests_total{service_name=~\"$service\", fhir_interaction!=\"\", fhir_interaction!~\"operation|unhandled|other\"}[$__range]) * 0)) or vector(0)",
                         "instant": true,
                         "range": false
                       },

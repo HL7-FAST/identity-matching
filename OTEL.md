@@ -33,7 +33,8 @@ The interceptor sets `http.route` to one of these templates. `{type}` stands for
 | `/fhir/{type}/{id}/$name` | Instance-level operation |
 | `/fhir/$name` | System-level operation |
 | `/fhir/{operation}`, `/fhir/{type}/{operation}`, `/fhir/{type}/{id}/{operation}` | An operation name the server did not register, which only a wildcard provider binds |
-| `/fhir/unhandled` | A request HAPI bound to no handler, such as an unknown resource type or a bad path |
+| `/fhir/unhandled` | A request HAPI rejected before it bound a handler, such as an unknown resource type or a bad path |
+| `/fhir/other` | A request an interceptor answered before HAPI bound a handler and did not name through `tagRoute`, such as the swagger UI |
 
 HAPI's own tokens `metadata`, `_search`, `_history`, and `$graphql` take the place of `$name`, for example `/fhir/{type}/_search`. Any other operation name that is not registered becomes `{operation}`. Resource types, ids, versions, query strings, and other client text never enter a route. The span keeps the real path in `url.path`. The `/fhir` prefix is a constant that matches the starter's servlet mapping.
 
@@ -64,8 +65,8 @@ The interceptor adds one to the counter `fhir.server.requests` for each request,
 | `VALIDATE` | `validate` |
 | `META`, `META_ADD`, `META_DELETE`, `ADD_TAGS`, `DELETE_TAGS`, `GET_TAGS` | `meta` |
 | `GRAPHQL_REQUEST` | `graphql` |
-| None, because HAPI bound no handler | `unhandled` |
-| None, because an interceptor answered the request itself through `tagRoute(request, route)`, as the UDAP discovery and certificate endpoints do | `other` |
+| None, because HAPI rejected the request before it bound a handler (the `SERVER_HANDLE_EXCEPTION` hook marks these) | `unhandled` |
+| None, because an interceptor answered the request before HAPI bound a handler, as the swagger UI and the UDAP discovery and certificate endpoints do | `other` |
 | Any other constant | `other` |
 
 A page fetch counts as a `search` on the resource type of the page's first entry, read from the response, and an empty page has no resource type.
@@ -152,7 +153,7 @@ In "Top requests (requests in range)", the Resource cell is empty for a system-l
 
 Every counter panel counts requests as the change in the cumulative counter over its window, with a zero baseline for a series that starts inside the window, so the first requests of a series and the requests after a restart are counted. The agent exports every 60 s, so a window shorter than 2m has too few samples and the panel step is 1m. After an export outage longer than 5 minutes, a series has no baseline sample at the start of the first window after the outage, so that window counts the whole total of the series as new requests.
 
-The request metric records a request that HAPI bound to no handler as `fhir_interaction="unhandled"` with no resource type, and the span route is `/fhir/unhandled`. "Unhandled request paths (traces)" shows the ten most frequent paths behind that route over the selected range. It reads Tempo: the server span keeps the real path in `url.path` next to the route. The query is a TraceQL metrics query, so Tempo needs the metrics-generator with the local-blocks processor, which `grafana/otel-lgtm` and Grafana Cloud have on. The panel shows client text and resource ids from the path, which the metrics never carry.
+The request metric records a request that HAPI rejected before it bound a handler as `fhir_interaction="unhandled"` with no resource type, and the span route is `/fhir/unhandled`. The sign is HAPI's exception with no operation type set, which the interceptor's `SERVER_HANDLE_EXCEPTION` hook records. A request another interceptor answered before HAPI bound a handler, such as the swagger UI, has no exception and counts as `other`. "Unhandled request paths (traces)" shows the ten most frequent paths behind that route over the selected range. It reads Tempo: the server span keeps the real path in `url.path` next to the route. The query is a TraceQL metrics query, so Tempo needs the metrics-generator with the local-blocks processor, which `grafana/otel-lgtm` and Grafana Cloud have on. The panel shows client text and resource ids from the path, which the metrics never carry.
 
 The heap limit in "Memory usage" is the maximum heap the JVM reports, which the starter image does not set, so the JVM derives it from the memory the container may use: 25% of the container limit by default, or the share that `-XX:MaxRAMPercentage` names. The JVM cannot see the container limit itself, and the container also holds the non-heap pools, thread stacks, and native memory, so a container memory alert needs the metrics of the container platform.
 
@@ -166,7 +167,7 @@ The request metric has one series for each combination of label values that a ru
 
 | Shape | Series per server |
 | --- | --- |
-| Typical: 20 resource types with 4 interactions each, 3 operations, and 3 system rows (capabilities, transaction, unhandled) | 86 |
+| Typical: 20 resource types with 4 interactions each, 3 operations, and 4 system rows (capabilities, transaction, unhandled, other) | 87 |
 | Exploratory client, `telemetry.resource-types` with 10 types: 11 resource values (the 10 types and `other`) with 16 interactions each, the `other` operation, and the system rows | About 200 |
 | Exploratory client, no `telemetry.resource-types` list, R4: 146 resource types with 16 interactions each, plus operations | About 2,000, capped by the SDK at 2,000 including the overflow series |
 | Error counter: 17 interactions × 2 outcomes, only combinations that occurred | At most 34 |

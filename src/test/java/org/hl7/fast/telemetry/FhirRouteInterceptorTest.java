@@ -25,12 +25,13 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FhirRouteInterceptorTest {
 
 	@Test
 	void route() {
-		assertEquals("/fhir/unhandled", route(null, "Patient", null, null));
+		assertEquals("/fhir/other", route(null, "Patient", null, null));
 		assertEquals("/fhir/metadata", route(RestOperationTypeEnum.METADATA, null, null, "metadata"));
 		assertEquals("/fhir", route(RestOperationTypeEnum.TRANSACTION, null, null, null));
 		assertEquals("/fhir/{type}", route(RestOperationTypeEnum.SEARCH_TYPE, "Patient", null, null));
@@ -100,7 +101,28 @@ class FhirRouteInterceptorTest {
 		assertEquals("meta", interaction(RestOperationTypeEnum.DELETE_TAGS));
 		assertEquals("meta", interaction(RestOperationTypeEnum.GET_TAGS));
 		assertEquals("graphql", interaction(RestOperationTypeEnum.GRAPHQL_REQUEST));
-		assertEquals("unhandled", interaction(null));
+		assertEquals("other", interaction(null));
+	}
+
+	@Test
+	void rejectionBeforeHandlerCountsAsUnhandled() {
+		FhirRouteInterceptor interceptor = interceptor(new RecordingCounter(), new RecordingCounter());
+		RequestDetails rejected = details(null, "wp-admin", null, null);
+		assertTrue(interceptor.rememberRejection(rejected));
+		assertEquals("unhandled", FhirRouteInterceptor.interactionFor(rejected));
+		assertEquals("/fhir/unhandled", FhirRouteInterceptor.buildRoute(rejected, Set.of()));
+		assertNull(attributes(rejected, Set.of(), Set.of()).get(FhirRouteInterceptor.RESOURCE_TYPE));
+		RequestDetails bound = details(RestOperationTypeEnum.READ, "Patient", "Patient/1", null);
+		interceptor.rememberRejection(bound);
+		assertEquals("read", FhirRouteInterceptor.interactionFor(bound));
+	}
+
+	@Test
+	void answeredBeforeHandlerCountsAsOther() {
+		RequestDetails swagger = details(null, "swagger-ui", null, null);
+		assertEquals("other", FhirRouteInterceptor.interactionFor(swagger));
+		assertEquals("/fhir/other", FhirRouteInterceptor.buildRoute(swagger, Set.of()));
+		assertNull(attributes(swagger, Set.of(), Set.of()).get(FhirRouteInterceptor.RESOURCE_TYPE));
 	}
 
 	@Test
@@ -130,7 +152,7 @@ class FhirRouteInterceptorTest {
 	void systemLevelRequestHasNoResourceType() {
 		assertNull(attributes(details(RestOperationTypeEnum.METADATA, null, null, "metadata"), Set.of(), Set.of()).get(FhirRouteInterceptor.RESOURCE_TYPE));
 		assertNull(attributes(details(null, "Patient", null, null), Set.of(), Set.of()).get(FhirRouteInterceptor.RESOURCE_TYPE));
-		assertEquals("unhandled", attributes(details(null, "Patient", null, null), Set.of(), Set.of()).get(FhirRouteInterceptor.INTERACTION));
+		assertEquals("other", attributes(details(null, "Patient", null, null), Set.of(), Set.of()).get(FhirRouteInterceptor.INTERACTION));
 	}
 
 	@Test
@@ -186,6 +208,10 @@ class FhirRouteInterceptorTest {
 		assertNull(attributes(patientResponse, Set.of(), Set.of()).get(FhirRouteInterceptor.RESOURCE_TYPE));
 	}
 
+	private static FhirRouteInterceptor interceptor(LongCounter requests, LongCounter errors) {
+		return new FhirRouteInterceptor(false, Set.of(), () -> Set.of(), requests, errors);
+	}
+
 	private static String route(RestOperationTypeEnum type, String resourceName, String id, String operation) {
 		return FhirRouteInterceptor.buildRoute(details(type, resourceName, id, operation), Set.of("$match", "$everything", "$export"));
 	}
@@ -196,7 +222,9 @@ class FhirRouteInterceptorTest {
 		RecordingCounter errors = new RecordingCounter();
 		FhirRouteInterceptor interceptor = new FhirRouteInterceptor(false, Set.of(), () -> Set.of("$everything"), counter, errors);
 		interceptor.finishServerSpan(details(RestOperationTypeEnum.EXTENDED_OPERATION_INSTANCE, "Patient", "Patient/1", "$everything"));
-		interceptor.finishServerSpan(details(null, "Patient", null, null));
+		RequestDetails rejected = details(null, "Patient", null, null);
+		interceptor.rememberRejection(rejected);
+		interceptor.finishServerSpan(rejected);
 		assertEquals(List.of(
 				new Increment(1, Attributes.of(
 						FhirRouteInterceptor.INTERACTION, "operation",

@@ -59,7 +59,7 @@ public class CertInterceptor {
     //
 
     if (theRequest.getRequestURI().equals("/fhir/cert/software-statement") && theRequest.getMethod().equalsIgnoreCase("POST")) {
-      FhirRouteInterceptor.tagRoute(theRequest, "/fhir/cert/software-statement");
+      FhirRouteInterceptor.tagRoute("/fhir/cert/software-statement");
 
       _logger.info("Intercepted /fhir/cert/software-statement request, sending signed software statement.");
 
@@ -125,7 +125,7 @@ public class CertInterceptor {
     //
 
     else if (theRequest.getRequestURI().equals("/fhir/cert/client-assertion") && theRequest.getMethod().equalsIgnoreCase("POST")) {
-      FhirRouteInterceptor.tagRoute(theRequest, "/fhir/cert/client-assertion");
+      FhirRouteInterceptor.tagRoute("/fhir/cert/client-assertion");
 
       _logger.info("Intercepted /fhir/cert/client-assertion request, sending signed client assertion.");
 

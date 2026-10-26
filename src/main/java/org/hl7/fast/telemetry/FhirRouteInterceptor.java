@@ -18,7 +18,6 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.instrumentation.api.semconv.http.HttpServerRoute;
 import io.opentelemetry.instrumentation.api.semconv.http.HttpServerRouteSource;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -38,11 +37,12 @@ import org.hl7.fhir.instance.model.api.IIdType;
 public class FhirRouteInterceptor {
 
 	static final String BASE = "/fhir";
-	static final String UNHANDLED = BASE + "/unhandled";
-	static final String REDACTED = "[redacted]";
 	static final String OTHER = "other";
+	static final String UNHANDLED = BASE + "/unhandled";
+	static final String OTHER_ROUTE = BASE + "/" + OTHER;
+	static final String REDACTED = "[redacted]";
 	static final String PAGE_RESOURCE_TYPE = FhirRouteInterceptor.class.getName() + ".pageResourceType";
-	static final String SELF_ANSWERED = FhirRouteInterceptor.class.getName() + ".selfAnswered";
+	static final String REJECTED = FhirRouteInterceptor.class.getName() + ".rejected";
 	/** Path tokens HAPI binds itself. Any other operation name must come from a registered provider. */
 	static final Set<String> HAPI_TOKENS = Set.of(
 			Constants.URL_TOKEN_METADATA, Constants.PARAM_SEARCH, Constants.PARAM_HISTORY, Constants.OPERATION_NAME_GRAPHQL);
@@ -134,6 +134,24 @@ public class FhirRouteInterceptor {
 		}
 	}
 
+	/**
+	 * HAPI raises the exception for an unknown resource type, an unknown operation, or a bare root request
+	 * before it sets the operation type, so an exception with no operation type is the exact sign that no
+	 * handler ran. Runs first so a hook that answers the exception itself cannot hide it. An exception
+	 * after a handler was bound has an operation type and is ignored here.
+	 */
+	@Hook(value = Pointcut.SERVER_HANDLE_EXCEPTION, order = Integer.MIN_VALUE)
+	public boolean rememberRejection(RequestDetails details) {
+		if (details.getRestOperationType() == null) {
+			details.getUserData().put(REJECTED, Boolean.TRUE);
+		}
+		return true;
+	}
+
+	private static boolean isRejected(RequestDetails details) {
+		return details.getUserData().containsKey(REJECTED);
+	}
+
 	/** Read once, on the first request. A provider registered later counts as "other" and routes as {operation}. */
 	private Set<String> operations() {
 		return knownOperations.updateAndGet(known -> known != null ? known : registeredOperations.get());
@@ -151,23 +169,10 @@ public class FhirRouteInterceptor {
 	}
 
 	/**
-	 * For interceptors that answer a request before HAPI binds a handler, such as the UDAP discovery and
-	 * certificate endpoints. HAPI still completes the request with no operation type, so the mark on the
-	 * servlet request keeps it out of the unhandled count.
-	 */
-	public static void tagRoute(HttpServletRequest request, String route) {
-		request.setAttribute(SELF_ANSWERED, route);
-		tagRoute(route);
-	}
-
-	private static boolean isSelfAnswered(RequestDetails details) {
-		return details instanceof ServletRequestDetails servlet
-				&& servlet.getServletRequest().getAttribute(SELF_ANSWERED) != null;
-	}
-
-	/**
-	 * A null operation type means HAPI bound no handler, so the parsed path parts are raw client text and
-	 * must not become a route. The resource name becomes {type} so the route set does not grow with the
+	 * A null operation type means no handler ran, so the parsed path parts are raw client text and must
+	 * not become a route. A request HAPI rejected routes as unhandled. One an interceptor answered keeps
+	 * the route it tagged, or falls back to /fhir/other when it tagged none, as the swagger UI does.
+	 * The resource name becomes {type} so the route set does not grow with the
 	 * types clients request. An operation name only a wildcard provider binds becomes {operation}. HAPI's
 	 * own tokens stay as they are. Compartment and secondary operation are left out because update,
 	 * delete, and patch bind without checking them. Only a vread adds the version segment, because an
@@ -175,7 +180,7 @@ public class FhirRouteInterceptor {
 	 */
 	static String buildRoute(RequestDetails details, Set<String> registeredOperations) {
 		if (details.getRestOperationType() == null) {
-			return UNHANDLED;
+			return isRejected(details) ? UNHANDLED : OTHER_ROUTE;
 		}
 		StringBuilder route = new StringBuilder(BASE);
 		if (details.getResourceName() != null) {
@@ -197,7 +202,7 @@ public class FhirRouteInterceptor {
 	}
 
 	/**
-	 * An unhandled request gets no resource type, because its path parts are raw client text. A page takes
+	 * A request no handler ran for gets no resource type, because its path parts are raw client text. A page takes
 	 * the type rememberPageResourceType stored, if any. With a non-empty allowlist, every other type is
 	 * "other". An operation name is kept only when a registered provider declares it, because a wildcard
 	 * provider accepts any name.
@@ -208,7 +213,7 @@ public class FhirRouteInterceptor {
 		String resourceType = details.getRestOperationType() == RestOperationTypeEnum.GET_PAGE
 				? (String) details.getUserData().get(PAGE_RESOURCE_TYPE)
 				: details.getResourceName();
-		if (!"unhandled".equals(interaction) && resourceType != null) {
+		if (details.getRestOperationType() != null && resourceType != null) {
 			boolean listed = resourceTypes.isEmpty() || resourceTypes.contains(resourceType);
 			attributes.put(RESOURCE_TYPE, listed ? resourceType : OTHER);
 		}
@@ -223,12 +228,14 @@ public class FhirRouteInterceptor {
 
 	/**
 	 * Batch and transaction bundles share the TRANSACTION handler, so the bundle type tells them apart.
-	 * A constant a later HAPI release adds is "other", and so is a request an interceptor answered itself.
+	 * A constant a later HAPI release adds is "other". No operation type means no handler ran: HAPI
+	 * rejected the request, which is "unhandled", or an interceptor answered it before HAPI bound a
+	 * handler, such as the swagger UI or the UDAP discovery endpoint, which is "other".
 	 */
 	static String interactionFor(RequestDetails details) {
 		RestOperationTypeEnum type = details.getRestOperationType();
 		if (type == null) {
-			return isSelfAnswered(details) ? OTHER : "unhandled";
+			return isRejected(details) ? "unhandled" : OTHER;
 		}
 		return switch (type) {
 			case READ -> "read";
