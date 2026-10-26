@@ -83,29 +83,19 @@ The name of this header is configured in the `hapi.fhir.remote-match-header` pro
 
 Telemetry is off unless the bundled OpenTelemetry Java agent is attached through environment variables.
 
-Local Grafana stack with a provisioned dashboard:
+Local Grafana stack with the provisioned dashboard:
 
 ```bash
 docker compose -f docker-compose.otel.yml up --build   # Grafana at http://localhost:3000
 ```
 
-Outside Docker, fetch the agent and attach it:
+Outside Docker, fetch the agent and attach it with the same settings file:
 
 ```bash
 curl -LSs -o otel/opentelemetry-javaagent.jar https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.32.0/opentelemetry-javaagent.jar
 export JAVA_TOOL_OPTIONS=-javaagent:$PWD/otel/opentelemetry-javaagent.jar
+export OTEL_JAVAAGENT_CONFIGURATION_FILE=$PWD/otel/agent.properties
 ```
-
-Environment variables (local values in `docker-compose.otel.yml`):
-
-| Variable | Value |
-|---|---|
-| `OTEL_SERVICE_NAME` | `fast-identity-matching` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` locally, or the Grafana Cloud OTLP gateway |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Grafana Cloud: `Authorization=Basic <base64 of instanceId:token>` |
-| `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment.name=production` on hosted instances, unset locally |
-| `OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED` | `false` |
-| `OTEL_INSTRUMENTATION_TOMCAT_ENABLED`<br>`OTEL_INSTRUMENTATION_SERVLET_ENABLED`<br>`OTEL_INSTRUMENTATION_OPENTELEMETRY_API_ENABLED`<br>`OTEL_INSTRUMENTATION_OPENTELEMETRY_INSTRUMENTATION_API_ENABLED`<br>`OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED` | `true` |
 
 Search query strings are left out of spans and the access log by default. Set `telemetry.capture-query-strings: true` (env `TELEMETRY_CAPTURE_QUERY_STRINGS=true`) to keep them.
 

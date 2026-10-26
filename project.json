@@ -6,11 +6,22 @@
   "sourceRoot": "src",
   "packageBase": "org.hl7.fast",
   "fhirVersion": "R4",
-  "pluginVersion": "0.3.0",
+  "pluginVersion": "0.3.1",
   "hapiReleaseVersion": "8.10.0-3",
   "tags": [
     "nx-fhir-server",
     "fhir",
     "server"
-  ]
+  ],
+  "features": {
+    "otel": {
+      "version": 1,
+      "options": {
+        "serviceName": "fast-identity-matching",
+        "dashboard": true,
+        "compose": true,
+        "serve": true
+      }
+    }
+  }
 }

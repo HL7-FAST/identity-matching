@@ -1,6 +1,6 @@
 apiVersion: 1
 providers:
-  - name: FAST Identity Matching
+  - name: fast-identity-matching
     folder: FAST Identity Matching
     type: file
     updateIntervalSeconds: 30

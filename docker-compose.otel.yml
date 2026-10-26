@@ -13,22 +13,13 @@ services:
   hapi-fhir-jpaserver-start:
     environment:
       JAVA_TOOL_OPTIONS: "-javaagent:/app/opentelemetry-javaagent.jar"
-      OTEL_SERVICE_NAME: fast-identity-matching
+      OTEL_JAVAAGENT_CONFIGURATION_FILE: /app/otel/agent.properties
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4318
-      # Only the named instrumentations run: the server span and its route, the span attributes set in code, and the logs.
-      OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED: "false"
-      OTEL_INSTRUMENTATION_TOMCAT_ENABLED: "true"
-      OTEL_INSTRUMENTATION_SERVLET_ENABLED: "true"
-      OTEL_INSTRUMENTATION_OPENTELEMETRY_API_ENABLED: "true"
-      OTEL_INSTRUMENTATION_OPENTELEMETRY_INSTRUMENTATION_API_ENABLED: "true"
-      OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED: "true"
       # Search query strings are dropped from the access log and server spans by default.
       # Lowercase only. A synthetic-data deployment may let them through:
       # TELEMETRY_CAPTURE_QUERY_STRINGS: "true"
-
-      # Grafana Cloud instead of the local stack: replace the endpoint and add the token.
-      # OTEL_EXPORTER_OTLP_ENDPOINT: https://otlp-gateway-<region>.grafana.net/otlp
-      # OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${GRAFANA_CLOUD_OTLP_TOKEN:?set GRAFANA_CLOUD_OTLP_TOKEN}"
+    volumes:
+      - ./otel/agent.properties:/app/otel/agent.properties:ro
     depends_on:
       - lgtm
 
@@ -38,9 +29,14 @@ services:
       - "${LGTM_GRAFANA_PORT:-3000}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
       - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
+    # To drop the agent's HTTP duration histogram before Prometheus stores it, uncomment the
+    # OTELCOL_EXTRA_ARGS and otelcol-filter.yaml lines. The filter is in otel/otelcol-filter.yaml.
+    # environment:
+    #   OTELCOL_EXTRA_ARGS: --config=file:/otel-lgtm/otelcol-filter.yaml
     volumes:
       - ./otel/grafana/dashboards:/otel-lgtm/dashboards:ro
       - ./otel/grafana/provisioning/dashboards:/otel-lgtm/grafana/conf/provisioning/dashboards:ro
+      # - ./otel/otelcol-filter.yaml:/otel-lgtm/otelcol-filter.yaml:ro
       - otel-grafana:/data/grafana
       - otel-prometheus:/data/prometheus
       - otel-loki:/data/loki

@@ -1,0 +1,15 @@
+# Drops the Java agent's http.server.request.duration histogram, 17 metric series for each
+# route, method, and status code, before the local otel-lgtm collector stores metrics.
+# Enable it with the OTELCOL_EXTRA_ARGS and volume lines in docker-compose.otel.yml.
+# The collector replaces lists when it merges config files, so the pipeline repeats batch.
+processors:
+  filter/histogram:
+    error_mode: ignore
+    metrics:
+      metric:
+        - 'name == "http.server.request.duration"'
+
+service:
+  pipelines:
+    metrics:
+      processors: [filter/histogram, batch]

@@ -589,4 +589,17 @@ hapi:
 telemetry:
   # Query strings reach the access log and the server span (url.query) only when true (env TELEMETRY_CAPTURE_QUERY_STRINGS).
   capture-query-strings: false
+  # Resource types that get their own value on the fhir.server.requests metric. Every other type counts as "other".
+  resource-types:
+    - Patient
+    - Person
+    - RelatedPerson
+    - Organization
+    - Practitioner
+    - PractitionerRole
+    - InsurancePlan
+    - Endpoint
+    - Location
+    - HealthcareService
+    - Binary
 

@@ -53,7 +53,7 @@ public class DiscoveryInterceptor
 	public boolean incomingRequestPreProcessed(HttpServletRequest theRequest, HttpServletResponse theResponse) throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException, InvalidKeySpecException, UnrecoverableKeyException {
 		// Check if the request is for /.well-known/udap
 		if (theRequest.getRequestURI().equals("/fhir/.well-known/udap")) {
-			FhirRouteInterceptor.tagRoute("/fhir/.well-known/udap");
+			FhirRouteInterceptor.tagRoute(theRequest, "/fhir/.well-known/udap");
 
 			_logger.info("Intercepted discovery request, sending security capability statement.");
 
