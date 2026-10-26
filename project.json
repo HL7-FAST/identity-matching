@@ -7,12 +7,7 @@
   "packageBase": "org.hl7.fast",
   "fhirVersion": "R4",
   "pluginVersion": "0.3.1",
-  "hapiReleaseVersion": "8.10.0-3",
-  "tags": [
-    "nx-fhir-server",
-    "fhir",
-    "server"
-  ],
+  "hapiReleaseVersion": "8.12.0-1",
   "features": {
     "otel": {
       "version": 1,
@@ -23,5 +18,10 @@
         "serve": true
       }
     }
-  }
+  },
+  "tags": [
+    "nx-fhir-server",
+    "fhir",
+    "server"
+  ]
 }
